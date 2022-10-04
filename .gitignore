@@ -5,6 +5,9 @@
 # Session Data files
 .RData
 
+# Markdown HTML files
+*.html
+
 # User-specific files
 .Ruserdata
 
