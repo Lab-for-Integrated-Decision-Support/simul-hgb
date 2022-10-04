@@ -1,0 +1,143 @@
+---
+title: "01_Cohort_Description"
+author: "Adam Dziorny"
+date: '2022-10-04'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+The purpose of this markdown is to report information on the cohort necessary to populate "Table 1" of our publication.
+
+## Initialize
+
+First we load the necessary packages:
+
+```{r, warning=FALSE}
+suppressPackageStartupMessages({
+  
+  # Data frame manipulation
+  require(dplyr)
+  
+  # Graphics and output
+  require(ggplot2)
+  require(cowplot)
+  
+  # Tables
+  require(knitr)
+  require(kableExtra)
+})
+```
+
+Ensure the environmental variables are specified:
+
+```{r}
+if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
+    Sys.getenv('PICU_LAB_IMG_PATH') == '' |
+    Sys.getenv('PICU_LAB_IN_FILE') == '')
+  stop('Missing necessary environmental variables - see README.md')
+```
+
+## Data Input
+
+Load data from the `DATA_PATH` with the associated `IN_FILE`, adding a file separator between them. This should result in loading two data frames: `cohort.df` and `labs.df`.
+
+```{r}
+load(
+  file = file.path(
+    Sys.getenv('PICU_LAB_DATA_PATH'),
+    Sys.getenv('PICU_LAB_IN_FILE')
+  )
+)
+```
+
+## Cohort Counts
+
+Display counts of the ICU admissions (by `ENC_KEY`), hospital encounters (by `HOSP_KEY`) and patients (by `PAT_KEY`) for this site:
+
+```{r}
+# ICU, hospital, and patient counts 
+cat(sprintf('# Unique ICU encounters: %d\n', 
+            length(unique(cohort.df$ENC_KEY))))
+
+cat(sprintf('# unique Hospital encounters: %d\n',
+            length(unique(cohort.df$HOSP_KEY))))
+
+cat(sprintf('# unique Patients: %d\n',
+            length(unique(cohort.df$PAT_KEY))))
+```
+
+Gender split. Note that these are distinct to each patient `PAT_KEY`, and so are taken as distinct to those keys first:
+
+```{r}
+cohort.df %>%
+  dplyr::distinct(PAT_KEY, SEX) %>%
+  dplyr::group_by(SEX) %>%
+  dplyr::summarise(
+    cnt = n(),
+    perc = cnt / length(unique(cohort.df$PAT_KEY)) * 100.
+  ) %>%
+  knitr::kable(
+    col.names = c('Sex', 'Count', '%'),
+    digits = c(0,0,2)
+  ) %>%
+  kableExtra::kable_paper(c("hover", "striped"), full_width = F)
+```
+
+Age at admission in years (ensure maximum age is < 18 years):
+
+```{r}
+summary(cohort.df$AGE_ICU_IN / 365.25)
+
+# QQ Plot
+cohort.df %>%
+  ggplot(aes(sample = AGE_ICU_IN)) +
+  stat_qq() +
+  theme_bw()
+
+# Test for normality:
+ks.test(cohort.df$AGE_ICU_IN, 'pnorm')
+```
+
+ICU length of stay (in days):
+
+```{r}
+summary(cohort.df$ICU_LOS / 24.)
+
+# QQ Plot
+cohort.df %>%
+  ggplot(aes(sample = ICU_LOS)) +
+  stat_qq() +
+  theme_bw()
+
+# Test for normality:
+ks.test(cohort.df$ICU_LOS, 'pnorm')
+```
+
+Total ICU Days - round up from LOS, add together:
+
+```{r}
+sum(ceiling(cohort.df$ICU_LOS / 24.))
+```
+
+Hospital mortality (use the column `DISCH_DISP` which has standard values). Note that these are distinct to hospital encounters (`HOSP_KEY`), and so are first taken as the distinct value of those:
+
+```{r}
+cohort.df %>%
+  dplyr::distinct(HOSP_KEY, DISCH_DISP) %>%
+  dplyr::group_by(DISCH_DISP) %>%
+  dplyr::summarise(
+    cnt = n(),
+    perc = cnt / nrow(cohort.df) * 100.
+  ) %>%
+  knitr::kable(
+    col.names = c('Discharge Disposition', 'Count', '%'),
+    digits = c(0,0,2)
+  ) %>%
+  kableExtra::kable_paper(c("hover", "striped"), full_width = F)
+```
+
