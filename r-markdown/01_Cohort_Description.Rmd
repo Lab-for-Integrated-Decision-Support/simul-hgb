@@ -210,6 +210,8 @@ labValueDescriptions <- function (df, PN, CN) {
 
 for ( PN in unique(labs.df$PROC_NAME) ) 
   labValueDescriptions(df = labs.df, PN = PN, CN = 'Hgb')
+
+rm(PN)
 ```
 
 ## Join Range

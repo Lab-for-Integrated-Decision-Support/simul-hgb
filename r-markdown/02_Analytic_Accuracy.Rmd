@@ -1,0 +1,356 @@
+---
+title: "02_Analytic_Accuracy"
+author: "Adam Dziorny"
+date: '2022-10-05'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+The purpose of this markdown is to report analytic accuracy by calculating the counts of simultaneous pairs, distributions across those pairs, correlation, and Bland-Altman analysis.
+
+## Initialize
+
+First we load the necessary packages:
+
+```{r, warning=FALSE}
+suppressPackageStartupMessages({
+  
+  # Data frame manipulation
+  require(dplyr)
+  
+  # Graphics and output
+  require(ggplot2)
+  require(cowplot)
+  
+  # Tables
+  require(knitr)
+  require(kableExtra)
+})
+```
+
+Ensure the environmental variables are specified:
+
+```{r}
+if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
+    Sys.getenv('PICU_LAB_IMG_PATH') == '' |
+    Sys.getenv('PICU_LAB_IN_FILE') == '' |
+    Sys.getenv('PICU_LAB_SITE_NAME') == '')
+  stop('Missing necessary environmental variables - see README.md')
+```
+
+## Data Input
+
+Load data from the `DATA_PATH` with the associated `IN_FILE`, adding a file separator between them. This should result in loading two data frames: `cohort.df` and `labs.df`.
+
+```{r}
+load(
+  file = file.path(
+    Sys.getenv('PICU_LAB_DATA_PATH'),
+    Sys.getenv('PICU_LAB_IN_FILE')
+  )
+)
+```
+
+## Set Parameters
+
+We will utilize several sensitivity analyses in this markdown. To simplify, we set several parameters ahead of time and then run through those parameters below.
+
+```{r}
+# The primary cutoff value between collection times (in minutes) to 
+# determine "simultaneous"
+primary.cutoff <- 15. 
+
+# Sensitivity analysis list
+sens.cutoffs <- c(1., 30., 90.)
+```
+
+## Join
+
+First we create the joined dataset to represent simultaneously obtained lab values. We need to allow the specifying of the two `PROC_NAME` comparators from the list - `CBC`, `BG`, or `ISTAT`. We also need to include several parameters that can be adjusted to reflect sensitivity analyses:
+
++ Collection time difference  (in minutes) 
++ Single (index) versus multiple simultaneous values per patient
+
+We will remove non-numeric rows, as there is no sensitivity analysis to do with these but rather we have reported their counts already. Below is the function to be used:
+
+```{r}
+#'
+#' @title CreatePairedDataset
+#' 
+#' @description Creates a dataset of paired simultaneous lab values
+#'
+#' @param labs.df The labs data frame
+#' @param cohort.df The cohort data frame, needed for PAT_KEY and DEPT
+#' @param PN A two-element list of PROC_NAMEs to join
+#' @param time.diff The max time difference (min) between collected times
+#' @param CN The COMP_NAME to join [Default: 'Hgb']
+#' @param multi.per.pt If FALSE, limit to first result per patient, otherwise 
+#'     if TRUE [Default], allow all
+#'     
+#' @returns The resulting joined data frame
+#'
+createPairedDataset <- function (labs.df, cohort.df, PN, time.diff, 
+                           CN = 'Hgb', multi.per.pt = T) {
+  
+  # First we filter to remove the non-numeric rows
+  filter.df <- 
+    labs.df %>%
+    dplyr::filter(!is.na(NUM_VAL) & NUM_VAL != 9999999.) %>%
+    dplyr::filter(COMP_NAME == CN)
+  
+  cat(sprintf('Number of component numeric rows in input data frame: %d\n',
+              nrow(filter.df)))
+  
+  # Join to get PAT_KEY and DEPT, used in subsequent filtering
+  keyed.df <- 
+    dplyr::left_join(
+      x = filter.df,
+      y = cohort.df %>% 
+        dplyr::select(ENC_KEY, PAT_KEY, DEPT),
+      by = c('ENC_KEY')
+    )
+  
+  # Now we filter by PN and join to create full data frame
+  joined.df <-
+    dplyr::inner_join(
+      x = keyed.df %>%
+        dplyr::filter(PROC_NAME == PN[1]) %>%
+        dplyr::select(ENC_KEY, PAT_KEY, DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
+      y = keyed.df %>%
+        dplyr::filter(PROC_NAME == PN[2]) %>%
+        dplyr::select(ENC_KEY, PAT_KEY, DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
+      by = c('ENC_KEY', 'PAT_KEY', 'DEPT'),
+      suffix = c('.x', '.y')
+    ) 
+  
+  # Join using base R, by column number
+  #   [[4]] is PN[1] COLLECTED_DT
+  #   [[7]] is PN[2] COLLECTED_DT
+  joined.df$COLL_TIME_DIFF_MIN <-
+    as.numeric(joined.df[[4]] - joined.df[[7]], units = 'mins')
+ 
+  # Apply the cutoff time
+  cutoff.df <- 
+    joined.df %>%
+    dplyr::filter(abs(COLL_TIME_DIFF_MIN) < time.diff)
+  
+  # Do we limit by one per patient?
+  if (!multi.per.pt) {
+    per.pt.df <-
+      cutoff.df %>%
+      # Sort by PAT_KEY and the first COLLECTED DT
+      dplyr::arrange(PAT_KEY, COLLECTED_DT.x) %>%
+      # Group by PAT_KEY and add a "LINE" number 
+      dplyr::group_by(PAT_KEY) %>%
+      dplyr::mutate(
+        PAT_LINE = row_number()
+      ) %>%
+      # Ungroup
+      dplyr::ungroup() %>%
+      # Filter for lines == 1 only
+      dplyr::filter(PAT_LINE == 1)
+  } else {
+    per.pt.df <- cutoff.df
+  }
+  
+  cat(sprintf('Number of paired, simultaneous values: %d\n',
+              nrow(per.pt.df)))
+  
+  return(per.pt.df)
+}
+```
+
+First we create the CBC - BG dataset using the primary cutoff value, and include all pairs per patient.
+
+```{r}
+cbc.bg <- createPairedDataset(
+  labs.df = labs.df, 
+  cohort.df = cohort.df,
+  PN = c('CBC', 'BG'), 
+  CN = 'Hgb',
+  time.diff = 15.,
+  multi.per.pt = T
+)
+```
+
+## Analyze
+
+From this dataset we can get counts of lab values per DEPT:
+
+```{r}
+table(cbc.bg$DEPT)
+```
+
+Now we describe the distributions:
+
+- Summary to show quintiles, mean, SD
+- QQ plot for normality
+- Density plot
+- Paired T-Test of the 
+
+```{r}
+#'
+#' @title Describe Paired Distributions
+#' 
+#' @description Descriptive statistics, QQ plots, density plot, and TTest 
+#' 
+#' @param df The paired data frame of interest
+#' @param PN A 2-element list (matching that from above) of the PROC_NAMEs
+#' @param paired.t If TRUE [Default], uses paired t test
+#' @param to.return If TRUE, returns list of results; otherwise returns NULL [Default]
+#' 
+#' @returns Pending the above flag, either NULL or list of graphics and t test
+#'
+describePairedDistributions <- function (df, PN, 
+                                         paired.t = T, to.return = F) {
+  
+  cat(sprintf('Summary of %s values:\n', PN[1]))
+  print(summary(df$NUM_VAL.x))
+  cat(sprintf('SD: %0.2f\n', sd(df$NUM_VAL.x)))
+  
+  # QQ Plot
+  p1 <-
+    df %>%
+    ggplot(aes(sample = NUM_VAL.x)) +
+    stat_qq() +
+    ggtitle(paste0('QQ Plot: ',PN[1])) +
+    theme_bw()
+  
+  print(p1)
+
+  cat(sprintf('Summary of %s values:\n', PN[2]))
+  print(summary(df$NUM_VAL.y))
+  cat(sprintf('SD: %0.2f\n', sd(df$NUM_VAL.y)))
+
+  # QQ Plot
+  p2 <-
+    df %>%
+    ggplot(aes(sample = NUM_VAL.y)) +
+    stat_qq() +
+    ggtitle(paste0('QQ Plot: ',PN[2])) +
+    theme_bw()
+  
+  print(p2)
+  
+  # Create Density Plot
+  Density <-
+    rbind(
+      data.frame(
+        df %>%
+          dplyr::select(NUM_VAL.x) %>%
+          dplyr::rename(val = NUM_VAL.x),
+        src = PN[1]),
+      data.frame(
+        df %>%
+          dplyr::select(NUM_VAL.y) %>%
+          dplyr::rename(val = NUM_VAL.y),
+        src = PN[2])
+    ) %>%
+    ggplot() +
+    geom_density(aes(x = val, fill = src), alpha = 0.5) +
+    scale_fill_brewer(type = 'qual', palette = 6) +
+    labs(fill = 'Source') +
+    xlab('Hemoglobin (g/dL)') +
+    ylab('Density (Distribution)') + 
+    theme_bw()
+  
+  print(Density)
+  
+  # Paired T-Test
+  t.res <-
+    t.test(
+      x = df$NUM_VAL.x,
+      y = df$NUM_VAL.y,
+      alternative = 'two.sided',
+      paired = TRUE
+    )
+  
+  print(t.res)
+  
+  # Return
+  if (to.return) {
+    return(list(
+      qq.p = list(p1, p2),
+      density.p = Density,
+      t.test = t.res
+    ))
+  } else {
+    return()
+  }
+}
+```
+
+Describe the primary paired distribution and capture the results, as we will have to save out these images for compilation with other sites.
+
+```{r}
+paired.res <- describePairedDistributions(
+  df = cbc.bg, 
+  PN = c('CBC', 'BG'),
+  paired.t = T,
+  to.return = T
+)
+```
+
+Now we evaluate the correlation among these paired values:
+
+```{r}
+#'
+#'
+#'
+determineCorrelation <- function (df, PN) {
+  
+  
+}
+```
+
+
+Next we describe the differences in time-to-result, which is the difference between resulted time and collected time:
+
+```{r}
+describeTimeToResult <- function (df, PN) {
+  
+  *** NEED TO FINISH THIS ***
+    
+  time_to_result <-
+    rbind(
+      hgb.of.interest %>%
+        dplyr::transmute(TTR = as.numeric(ORDER_PROC_RESULT_TIME.bg - SPECIMN_TAKEN_TIME.bg, units = 'mins')) %>%
+        dplyr::mutate(SRC = 'BG'),
+      hgb.of.interest %>%
+        dplyr::transmute(TTR = as.numeric(ORDER_PROC_RESULT_TIME.cbc - SPECIMN_TAKEN_TIME.cbc, units = 'mins')) %>%
+        dplyr::mutate(SRC = 'CBC')
+      )
+  
+  time_to_result.quantiles <- quantile(time_to_result$TTR, c(0.01, 0.99))
+  
+  panel.colors <- RColorBrewer::brewer.pal(3,"Set1")
+  
+  URMC_TTR <-
+    time_to_result %>%
+    dplyr::filter(TTR > 0. & TTR <= time_to_result.quantiles[2]) %>%
+    ggplot() +
+    geom_density(aes(x = TTR, fill = SRC), alpha = 0.5) +
+    scale_fill_manual(values = c('CBC' = panel.colors[1], 'BG' = panel.colors[2])) +
+    coord_cartesian(xlim = c(0, 150)) +
+    xlab('Time To Result (Resulted - Collected Timestamp, min)') +
+    ylab('Density') +
+    labs(fill = 'Source') +
+    theme_bw()
+  
+  URMC_TTR
+  
+  summary(time_to_result$TTR[time_to_result$SRC == 'BG'])
+  summary(time_to_result$TTR[time_to_result$SRC == 'CBC'])
+}
+```
+
+
+
+
+
+  
