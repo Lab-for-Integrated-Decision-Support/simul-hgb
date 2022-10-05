@@ -11,6 +11,7 @@ The input common data model should include the following (and this will be repea
 + `PICU_LAB_DATA_PATH` - The path (without trailing `/`) to the data files.
 + `PICU_LAB_IMG_PATH` - The path (without trailing `/`) to the image output directory.
 + `PICU_LAB_IN_FILE` - The name of the RData file (with the extension) containing the below data frames.
++ `PICU_LAB_SITE_NAME` - The site name used to identify output files for subsequent aggregation
 
 **Cohort Data Frame:**
 
@@ -60,4 +61,12 @@ Important notes about the cohort and labs:
 
 ## Analysis
 
-The markdown
+Analysis proceeds first independently on each site, then we aggregate the data files from each site to generate the final figures.
+
+### Site-wise Analysis
+
+Begin with `01_Cohort_Description.Rmd` which loads both data frames and displays information to populate Table 1. This markdown ends by looking for an optimum cutoff value by which to call labs "simultaneous". It writes out the following:
+
++ `<SITE>_thresholds_<PN-1>-<PN-2>.rData` - Contains both raw data and a ggplot list of the simultaneous value thresholds for this site
+
+Next, move on to ...
