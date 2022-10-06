@@ -61,12 +61,34 @@ Important notes about the cohort and labs:
 
 ## Analysis
 
-Analysis proceeds first independently on each site, then we aggregate the data files from each site to generate the final figures.
+Analysis proceeds first independently on each site, then we aggregate the data files from each site to generate the final figures. Note that each Markdown file has functions written in chunks.
 
 ### Site-wise Analysis
 
+#### Cohort Description
+
 Begin with `01_Cohort_Description.Rmd` which loads both data frames and displays information to populate Table 1. This markdown ends by looking for an optimum cutoff value by which to call labs "simultaneous". It writes out the following:
 
-+ `<SITE>_thresholds_<PN-1>-<PN-2>.rData` - Contains both raw data and a ggplot list of the simultaneous value thresholds for this site
++ `<SITE>_thresholds_<PN-1>-<PN-2>.rData` - Contains both raw data and a ggplot list of the simultaneous value thresholds for this site. 
 
-Next, move on to ...
+The functions in this markdown are:
+
++ `labValueDescriptions`: Displays graph and summary for lab values by PROC and COMP
++ `timeThresholdGraph`: Joins CN across PNs and plot collected time difference by cutoff
+
+#### Analytic Accuracy
+
+Next, move on to the Analytic analysis which can be found in `02_Analytic_Accuracy.Rmd`. This markdown creates the paired dataset by specifying the cutoff time and whether we include repeated measures from the same patient. This paired dataset is then used to view the data distributions, correlations, Bland-Altman, and time-to-result.
+
+Depending on the PROCs in the datset, there will be numerous file outputs from this markdown. 
+
+The functions in this markdown are:
+
++ `createPairedDataset`: Creates a dataset of paired simultaneous lab values
++ `describePairedDistributions`: Descriptive statistics, QQ plots, density plot, and TTest 
++ `determineCorrelation`: Determine the Pearson Correlation among pairs by DEPT
++ `comparePearsonCorrelations`: Use the Fisher's R to Z transformation and return significance 
++ `performBlandAltmanAnalysis`: Calculates Bland-Altman statistics and generates plots
++ `describeTimeToResult`: Compares and describes the time to result between PROCs
++ `runAllAnalytic`: Runs through all analytic analyses, for sensitivity analyses
+

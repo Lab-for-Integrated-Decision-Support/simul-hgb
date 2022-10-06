@@ -43,6 +43,12 @@ if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
   stop('Missing necessary environmental variables - see README.md')
 ```
 
+Set the run date (for file export):
+
+```{r}
+run.date <- '2022-10-05'
+```
+
 ## Data Input
 
 Load data from the `DATA_PATH` with the associated `IN_FILE`, adding a file separator between them. This should result in loading two data frames: `cohort.df` and `labs.df`.
@@ -175,7 +181,7 @@ Explore the summary and histograms of lab values, for each procedure. Note impor
 
 ```{r}
 #'
-#' @title labValueDescriptions
+#' @title Lab Value Descriptions
 #' 
 #' @description Displays graph and summary for lab values by PROC and COMP
 #' 
@@ -207,7 +213,11 @@ labValueDescriptions <- function (df, PN, CN) {
   
   print(p)
 }
+```
 
+Describe the lab values for each type:
+
+```{r}
 for ( PN in unique(labs.df$PROC_NAME) ) 
   labValueDescriptions(df = labs.df, PN = PN, CN = 'Hgb')
 
@@ -220,7 +230,7 @@ Here for the first time we create a joined data frame of "simultaneously" collec
 
 ```{r}
 #'
-#' @title timeThresholdGraph
+#' @title Time Threshold Graph
 #' 
 #' @description Joins CN across PNs and plot collected time difference by cutoff
 #' 
@@ -235,10 +245,13 @@ Here for the first time we create a joined data frame of "simultaneously" collec
 #'     fig := The ggplot figure
 #' 
 timeThresholdGraph <- function (df, PN, CN,
-                                to.save = T, to.return = F) {
+                                to.save = T, run.date = NA, to.return = F) {
   
   if (length(PN) != 2)
     stop('Must pass PN as list of length 2')
+  
+  if (any(is.na(run.date)) & to.save)
+    stop('If `to.save` is TRUE, must specify a run date')
   
   # Filter to remove the non-numeric rows
   filter.df <- 
@@ -312,7 +325,8 @@ timeThresholdGraph <- function (df, PN, CN,
         paste0(
           Sys.getenv('PICU_LAB_SITE_NAME'),
           '_thresholds_',
-          PN[1],'-',PN[2],'.rData'
+          PN[1],'-',PN[2],'_',
+          run.date,'.rData'
         )
       ),
       output.list
@@ -325,11 +339,16 @@ timeThresholdGraph <- function (df, PN, CN,
   else
     return()
 }
+```
 
-if ('BG' %in% unique(labs.df$PROC_NAME))
-  timeThresholdGraph(df = labs.df, PN = c('CBC', 'BG'), CN = 'Hgb')
+Run the time threshold graph for both PROC options (if they exist):
 
-if ('ISTAT' %in% unique(labs.df$PROC_NAME))
-  timeThresholdGraph(df = labs.df, PN = c('CBC', 'ISTAT'), CN = 'Hgb')
+```{r}
+for (proc.option in c('BG', 'ISTAT')) {
+  
+  if (proc.option %in% unique(labs.df$PROC_NAME)) 
+    timeThresholdGraph(df = labs.df, PN = c('CBC', proc.option), CN = 'Hgb')
+
+}
 ```
 
