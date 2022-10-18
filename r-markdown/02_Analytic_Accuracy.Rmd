@@ -25,12 +25,7 @@ suppressPackageStartupMessages({
   
   # Graphics and output
   require(ggplot2)
-  require(cowplot)
-  
-  # Tables
-  require(knitr)
-  require(kableExtra)
-  
+
   # Bland Altman
   require(BlandAltmanLeh)
 })
@@ -84,8 +79,9 @@ First we create the joined dataset to represent simultaneously obtained lab valu
 
 + Collection time difference  (in minutes) 
 + Single (index) versus multiple simultaneous values per patient
++ Encounter Key (needed to join multiple panels with different `ORDER_PROC_KEY` values)
 
-We will remove non-numeric rows, as there is no sensitivity analysis to do with these but rather we have reported their counts already. Below is the function to be used:
+We will remove non-numeric rows, as there is no sensitivity analysis to do with these but rather we have reported their counts already. Below is the function to be used (note that this may be duplicated in other Rmarkdown files - changes should be made *here* and not in other files):
 
 ```{r}
 #'
@@ -129,29 +125,80 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
     dplyr::inner_join(
       x = keyed.df %>%
         dplyr::filter(PROC_NAME == PN[1]) %>%
-        dplyr::select(ENC_KEY, PAT_KEY, DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
+        dplyr::select(ENC_KEY, PAT_KEY, ORDER_PROC_KEY, 
+                      DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
       y = keyed.df %>%
         dplyr::filter(PROC_NAME == PN[2]) %>%
-        dplyr::select(ENC_KEY, PAT_KEY, DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
+        dplyr::select(ENC_KEY, PAT_KEY, ORDER_PROC_KEY,
+                      DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
       by = c('ENC_KEY', 'PAT_KEY', 'DEPT'),
       suffix = c('.x', '.y')
     ) 
   
   # Join using base R, by column number
-  #   [[4]] is PN[1] COLLECTED_DT
-  #   [[7]] is PN[2] COLLECTED_DT
+  #   [[5]] is PN[1] COLLECTED_DT
+  #   [[9]] is PN[2] COLLECTED_DT
   joined.df$COLL_TIME_DIFF_MIN <-
-    as.numeric(joined.df[[4]] - joined.df[[7]], units = 'mins')
+    as.numeric(joined.df[[5]] - joined.df[[9]], units = 'mins')
  
   # Apply the cutoff time
   cutoff.df <- 
     joined.df %>%
     dplyr::filter(abs(COLL_TIME_DIFF_MIN) < time.diff)
   
+  cat(sprintf('Number of paired, simultaneous values meeting cutoff: %d\n',
+              nrow(cutoff.df)))
+    
+  # Ensure that each first PROC_NAME order is only used once - meaning that  
+  # each ORDER_PROC_KEY.x should be unique
+  unique.x.df <- 
+    cutoff.df%>%
+    dplyr::arrange(ORDER_PROC_KEY.x, COLL_TIME_DIFF_MIN) %>%
+    dplyr::group_by(ORDER_PROC_KEY.x) %>%
+    dplyr::summarize(
+      ORDER_PROC_KEY.y   = first( ORDER_PROC_KEY.y   ),
+      DEPT               = first( DEPT               ),
+      COLLECTED_DT.x     = first( COLLECTED_DT.x     ),
+      RESULT_DT.x        = first( RESULT_DT.x        ),
+      NUM_VAL.x          = first( NUM_VAL.x          ),
+      COLLECTED_DT.y     = first( COLLECTED_DT.y     ),
+      RESULT_DT.y        = first( RESULT_DT.y        ),
+      NUM_VAL.y          = first( NUM_VAL.y          ),
+      COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
+      ENC_KEY            = first( ENC_KEY )  
+    ) %>%
+    dplyr::ungroup()
+
+  cat(sprintf('Number of non-duplicated first PROC_NAME rows: %d\n',
+              nrow(unique.x.df)))
+    
+  # Similarly, ensure that each second PROC_NAME order is being used just once
+  # (i.e., that ORDER_PROC_KEY.y is not duplicated)
+  non.dup.df <-
+    unique.x.df %>%
+    dplyr::arrange(ORDER_PROC_KEY.y, COLL_TIME_DIFF_MIN) %>%
+    dplyr::group_by(ORDER_PROC_KEY.y) %>%
+    dplyr::summarize(
+      ORDER_PROC_KEY.x   = first( ORDER_PROC_KEY.x   ),
+      DEPT               = first( DEPT               ),
+      COLLECTED_DT.x     = first( COLLECTED_DT.x     ),
+      RESULT_DT.x        = first( RESULT_DT.x        ),
+      NUM_VAL.x          = first( NUM_VAL.x          ),
+      COLLECTED_DT.y     = first( COLLECTED_DT.y     ),
+      RESULT_DT.y        = first( RESULT_DT.y        ),
+      NUM_VAL.y          = first( NUM_VAL.y          ),
+      COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
+      ENC_KEY            = first( ENC_KEY )
+    ) %>%
+    dplyr::ungroup()
+  
+  cat(sprintf('Number of non-duplicated second PROC_NAME rows: %d\n',
+              nrow(non.dup.df)))
+    
   # Do we limit by one per patient?
   if (!multi.per.pt) {
     per.pt.df <-
-      cutoff.df %>%
+      non.dup.df %>%
       # Sort by PAT_KEY and the first COLLECTED DT
       dplyr::arrange(PAT_KEY, COLLECTED_DT.x) %>%
       # Group by PAT_KEY and add a "LINE" number 
@@ -162,13 +209,17 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       # Ungroup
       dplyr::ungroup() %>%
       # Filter for lines == 1 only
-      dplyr::filter(PAT_LINE == 1)
+      dplyr::filter(PAT_LINE == 1) %>%
+      dplyr::select(-PAT_LINE)
   } else {
-    per.pt.df <- cutoff.df
+    per.pt.df <- non.dup.df
   }
   
   cat(sprintf('Number of paired, simultaneous values: %d\n',
               nrow(per.pt.df)))
+  
+  cat(sprintf('Number of duplicated ORDER_PROC_KEY.x values: %d\n',
+              sum(duplicated(per.pt.df$ORDER_PROC_KEY.x))))
   
   return(per.pt.df)
 }
@@ -229,7 +280,7 @@ describePairedDistributions <- function (df, PN,
     df %>%
     ggplot(aes(sample = NUM_VAL.x)) +
     stat_qq() +
-    ggtitle(paste0('QQ Plot: ',PN[1])) +
+    ggtitle(paste0('Lab Value Distribution QQ Plot: ',PN[1])) +
     theme_bw()
   
   print(p1)
@@ -243,7 +294,7 @@ describePairedDistributions <- function (df, PN,
     df %>%
     ggplot(aes(sample = NUM_VAL.y)) +
     stat_qq() +
-    ggtitle(paste0('QQ Plot: ',PN[2])) +
+    ggtitle(paste0('Lab Value Distribution QQ Plot: ',PN[2])) +
     theme_bw()
   
   print(p2)
@@ -613,7 +664,7 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
     dplyr::filter(SRC == PN[1]) %>%
     ggplot(aes(sample = TTR)) +
     stat_qq() +
-    ggtitle(paste0('QQ Plot: ',PN[1])) +
+    ggtitle(paste0('TTR QQ Plot: ',PN[1])) +
     theme_bw()
   
   print(p1)
@@ -623,7 +674,7 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
     dplyr::filter(SRC == PN[2]) %>%
     ggplot(aes(sample = TTR)) +
     stat_qq() +
-    ggtitle(paste0('QQ Plot: ',PN[2])) +
+    ggtitle(paste0('TTR QQ Plot: ',PN[2])) +
     theme_bw()
   
   print(p2)
@@ -676,7 +727,7 @@ save(
   primary.cutoff,
   paired.res,
   pcc.cbc.bg, pcc.cbc.bg.picu, pcc.cbc.bg.cicu,
-  ba.all,
+  ba.all, ba.picu, ba.cicu,
   TTR.p
 )
 ```
@@ -684,6 +735,7 @@ save(
 ```{r, echo=FALSE}
 # Remove some of the produced variables, so we don't accidentally use them below
 rm(paired.res, pcc.cbc.bg, pcc.cbc.bg.picu, pcc.cbc.bg.cicu, TTR.p)
+rm(ba.all, ba.picu, ba.cicu)
 rm(cbc.bg)
 ```
 
@@ -748,15 +800,15 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
               pcc.picu$cor.est,
               pcc.cicu$cor.est,
               comparePearsonCorrelations(
-                r1 = pcc.cbc.poc.picu$cor.est,
-                n1 = pcc.cbc.poc.picu$n,
+                r1 = pcc.picu$cor.est,
+                n1 = pcc.picu$n,
                 r2 = pcc.cicu$cor.est,
                 n2 = pcc.cicu$n
               )))
 
   # Bland Altman Analysis
   ba.all <- performBlandAltmanANalysis(
-    df = paired.res, 
+    df = paired.df, 
     PN = c('CBC', compare.PN),
     DPT = c('PICU', 'CICU'),
     to.graph = T, 
@@ -764,7 +816,7 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
   )
   
   ba.picu <- performBlandAltmanANalysis(
-    df = paired.res, 
+    df = paired.df, 
     PN = c('CBC', compare.PN),
     DPT = 'PICU',
     to.graph = T, 
@@ -772,7 +824,7 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
   )
   
   ba.cicu <- performBlandAltmanANalysis(
-    df = paired.res, 
+    df = paired.df, 
     PN = c('CBC', compare.PN),
     DPT = 'CICU',
     to.graph = T, 
@@ -852,5 +904,31 @@ for (proc.option in c('BG', 'ISTAT')) {
 }
 ```
 
+### Time Threshold
 
+Now we change parameters to alter the cutoff (min) between labs that get counted as "simultaneous" labs. We revert back to allowing multiple values per patient. We run this across both BG and ISTAT pairs (if they exist), across all `sens.cutoffs` values.
+
+```{r}
+for (cutoff in sens.cutoffs) {
+
+  for (proc.option in c('BG', 'ISTAT')) {
+    
+    if (proc.option %in% unique(labs.df$PROC_NAME)) {
+      
+      runAllAnalytic(
+        labs.df,
+        cohort.df, 
+        compare.PN = proc.option,
+        time.diff = cutoff,
+        multi.per.pt = T, 
+        run.date = run.date,
+        save.fn = NA
+      )
+      
+    } # If the PROC exists
+    
+  } # Across BG vs ISTAT
+  
+} # Across cutoffs
+```
   

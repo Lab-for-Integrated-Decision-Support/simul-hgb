@@ -80,7 +80,12 @@ The functions in this markdown are:
 
 Next, move on to the Analytic analysis which can be found in `02_Analytic_Accuracy.Rmd`. This markdown creates the paired dataset by specifying the cutoff time and whether we include repeated measures from the same patient. This paired dataset is then used to view the data distributions, correlations, Bland-Altman, and time-to-result.
 
-Depending on the PROCs in the datset, there will be numerous file outputs from this markdown. 
+Depending on the PROCs in the datset, there will be numerous file outputs from this markdown. These include:
+
++ `<SITE>_pri_cbc_bg_analytic_<date>.rData` - CBC-BG analysis using primary cutoff
++ `<SITE>_pri_cbc_istat_analytic_<date>.rData` - CBC-ISTAT analysis using primary cutoff
++ `<SITE>_single_pt_cbc_bg_analytic_<date>.rData` - CBC-BG with one value per patient
++ `<SITE>_single_pt_cbc_istat_analytic_<date>.rData` - CBC-ISTAT with one value per patient
 
 The functions in this markdown are:
 
@@ -91,4 +96,18 @@ The functions in this markdown are:
 + `performBlandAltmanAnalysis`: Calculates Bland-Altman statistics and generates plots
 + `describeTimeToResult`: Compares and describes the time to result between PROCs
 + `runAllAnalytic`: Runs through all analytic analyses, for sensitivity analyses
+
+#### Clinical Accuracy
+
+Next, move on to Clinical accuracy analysis found in `03_Clinical_Accuracy.Rmd`. In this markdown we create the paired dataset using a copy of the function found in the prior script. (N.B. - although convention dictates that code duplication is never appropriate, in this case it allows us to keep the function within the markdown file during development. After development, the function was pulled out to a package. Care was taken to ensure that both "versions" of the function were kept identical.) The paired dataset is then used to complete error grid analysis, regression, Cohen's Kappa, as well as "testS" of similarity. 
+
+The output data files from this markdown include:
+
+The functions in this markdown are:
+
++ `createPairedDataset`: Creates a dataset of paired simultaneous lab values (**duplicated**)
++ `calculateErrorGrid` : Calculates points within each area of Error Grid and plots
++ `gatherCovariates` : Creates pivoted data frame of covariate labs for each pair
++ `displayCovariateStats` : Displays statistics on covariates in the data frame
++ `filterImputeRegress` : ...
 
