@@ -4,7 +4,7 @@ The objective of this work is to determine the clinical and analytic accuracy of
 
 ## Input Format
 
-The input common data model should include the following (and this will be repeated in the GitHub repo, to ensure that the input data is correct):
+The input common data model should include the following:
 
 **Environment Variables:**
 

@@ -1,92 +1,8 @@
----
-title: "02_Analytic_Accuracy"
-author: "Adam Dziorny"
-date: '2022-10-05'
-output: html_document
----
+# Extracted functions from `02_Analytic_Accuracy.Rmd`
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-## Overview
-
-The purpose of this markdown is to report analytic accuracy by calculating the counts of simultaneous pairs, distributions across those pairs, correlation, and Bland-Altman analysis. Also includes the time-to-result numbers and figure.
-
-## Initialize
-
-First we load the necessary packages:
-
-```{r, warning=FALSE}
-suppressPackageStartupMessages({
-  
-  # Data frame manipulation
-  require(dplyr)
-  
-  # Graphics and output
-  require(ggplot2)
-
-  # Bland Altman
-  require(BlandAltmanLeh)
-})
-```
-
-Ensure the environmental variables are specified:
-
-```{r}
-if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
-    Sys.getenv('PICU_LAB_IMG_PATH') == '' |
-    Sys.getenv('PICU_LAB_IN_FILE') == '' |
-    Sys.getenv('PICU_LAB_SITE_NAME') == '')
-  stop('Missing necessary environmental variables - see README.md')
-```
-
-Specify the run date:
-
-```{r}
-run.date <- '2022-10-05'
-```
-
-## Data Input
-
-Load data from the `DATA_PATH` with the associated `IN_FILE`, adding a file separator between them. This should result in loading two data frames: `cohort.df` and `labs.df`.
-
-```{r}
-load(
-  file = file.path(
-    Sys.getenv('PICU_LAB_DATA_PATH'),
-    Sys.getenv('PICU_LAB_IN_FILE')
-  )
-)
-```
-
-## Set Parameters
-
-We will utilize several sensitivity analyses in this markdown. To simplify, we set several parameters ahead of time and then run through those parameters below.
-
-```{r}
-# The primary cutoff value between collection times (in minutes) to 
-# determine "simultaneous"
-primary.cutoff <- 15. 
-
-# Sensitivity analysis list
-sens.cutoffs <- c(1., 30., 90.)
-```
-
-## Join
-
-First we create the joined dataset to represent simultaneously obtained lab values. We need to allow the specifying of the two `PROC_NAME` comparators from the list - `CBC`, `BG`, or `ISTAT`. We also need to include several parameters that can be adjusted to reflect sensitivity analyses:
-
-+ Collection time difference  (in minutes) 
-+ Single (index) versus multiple simultaneous values per patient
-+ Encounter Key (needed to join multiple panels with different `ORDER_PROC_KEY` values)
-
-We will remove non-numeric rows, as there is no sensitivity analysis to do with these but rather we have reported their counts already. Below is the function to be used (note that this may be duplicated in other Rmarkdown files - changes should be made *here* and not in other files):
-
-```{r}
 #'
 #' @title Create Paired Dataset
-#' 
+#'
 #' @description Creates a dataset of paired simultaneous lab values
 #'
 #' @param labs.df The labs data frame
@@ -94,38 +10,40 @@ We will remove non-numeric rows, as there is no sensitivity analysis to do with 
 #' @param PN A two-element list of PROC_NAMEs to join
 #' @param time.diff The max time difference (min) between collected times
 #' @param CN The COMP_NAME to join [Default: 'Hgb']
-#' @param multi.per.pt If FALSE, limit to first result per patient, otherwise 
+#' @param multi.per.pt If FALSE, limit to first result per patient, otherwise
 #'     if TRUE [Default], allow all
-#'     
+#'
 #' @returns The resulting joined data frame
 #'
-createPairedDataset <- function (labs.df, cohort.df, PN, time.diff, 
-                           CN = 'Hgb', multi.per.pt = T) {
-  
+#' @export
+#'
+createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
+                                 CN = 'Hgb', multi.per.pt = T) {
+
   # First we filter to remove the non-numeric rows
-  filter.df <- 
+  filter.df <-
     labs.df %>%
     dplyr::filter(!is.na(NUM_VAL) & NUM_VAL != 9999999.) %>%
     dplyr::filter(COMP_NAME == CN)
-  
+
   cat(sprintf('Number of component numeric rows in input data frame: %d\n',
               nrow(filter.df)))
-  
+
   # Join to get PAT_KEY and DEPT, used in subsequent filtering
-  keyed.df <- 
+  keyed.df <-
     dplyr::left_join(
       x = filter.df,
-      y = cohort.df %>% 
+      y = cohort.df %>%
         dplyr::select(ENC_KEY, PAT_KEY, DEPT),
       by = c('ENC_KEY')
     )
-  
+
   # Now we filter by PN and join to create full data frame
   joined.df <-
     dplyr::inner_join(
       x = keyed.df %>%
         dplyr::filter(PROC_NAME == PN[1]) %>%
-        dplyr::select(ENC_KEY, PAT_KEY, ORDER_PROC_KEY, 
+        dplyr::select(ENC_KEY, PAT_KEY, ORDER_PROC_KEY,
                       DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL, AGE_PROC),
       y = keyed.df %>%
         dplyr::filter(PROC_NAME == PN[2]) %>%
@@ -133,25 +51,25 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
                       DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
       by = c('ENC_KEY', 'PAT_KEY', 'DEPT'),
       suffix = c('.x', '.y')
-    ) 
-  
+    )
+
   # Join using base R, by column number
   #   [[5]] is PN[1] COLLECTED_DT
   #   [[10]] is PN[2] COLLECTED_DT
   joined.df$COLL_TIME_DIFF_MIN <-
     as.numeric(joined.df[[5]] - joined.df[[10]], units = 'mins')
- 
+
   # Apply the cutoff time
-  cutoff.df <- 
+  cutoff.df <-
     joined.df %>%
     dplyr::filter(abs(COLL_TIME_DIFF_MIN) < time.diff)
-  
+
   cat(sprintf('Number of paired, simultaneous values meeting cutoff: %d\n',
               nrow(cutoff.df)))
-    
-  # Ensure that each first PROC_NAME order is only used once - meaning that  
+
+  # Ensure that each first PROC_NAME order is only used once - meaning that
   # each ORDER_PROC_KEY.x should be unique
-  unique.x.df <- 
+  unique.x.df <-
     cutoff.df%>%
     dplyr::arrange(ORDER_PROC_KEY.x, COLL_TIME_DIFF_MIN) %>%
     dplyr::group_by(ORDER_PROC_KEY.x) %>%
@@ -173,7 +91,7 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
 
   cat(sprintf('Number of non-duplicated first PROC_NAME rows: %d\n',
               nrow(unique.x.df)))
-    
+
   # Similarly, ensure that each second PROC_NAME order is being used just once
   # (i.e., that ORDER_PROC_KEY.y is not duplicated)
   non.dup.df <-
@@ -190,22 +108,22 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       RESULT_DT.y        = first( RESULT_DT.y        ),
       NUM_VAL.y          = first( NUM_VAL.y          ),
       COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
-      AGE_PROC           = first( AGE_PROC           ),      
+      AGE_PROC           = first( AGE_PROC           ),
       ENC_KEY            = first( ENC_KEY            ),
       PAT_KEY            = first( PAT_KEY            )
     ) %>%
     dplyr::ungroup()
-  
+
   cat(sprintf('Number of non-duplicated second PROC_NAME rows: %d\n',
               nrow(non.dup.df)))
-    
+
   # Do we limit by one per patient?
   if (!multi.per.pt) {
     per.pt.df <-
       non.dup.df %>%
       # Sort by PAT_KEY and the first COLLECTED DT
       dplyr::arrange(PAT_KEY, COLLECTED_DT.x) %>%
-      # Group by PAT_KEY and add a "LINE" number 
+      # Group by PAT_KEY and add a "LINE" number
       dplyr::group_by(PAT_KEY) %>%
       dplyr::mutate(
         PAT_LINE = row_number()
@@ -218,67 +136,37 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
   } else {
     per.pt.df <- non.dup.df
   }
-  
+
   cat(sprintf('Number of paired, simultaneous values: %d\n',
               nrow(per.pt.df)))
-  
+
   cat(sprintf('Number of duplicated ORDER_PROC_KEY.x values: %d\n',
               sum(duplicated(per.pt.df$ORDER_PROC_KEY.x))))
-  
+
   return(per.pt.df)
 }
-```
 
-First we create the CBC - BG dataset using the primary cutoff value, and include all pairs per patient.
-
-```{r}
-cbc.bg <- createPairedDataset(
-  labs.df = labs.df, 
-  cohort.df = cohort.df,
-  PN = c('CBC', 'BG'), 
-  CN = 'Hgb',
-  time.diff = primary.cutoff,
-  multi.per.pt = T
-)
-```
-
-## Analyze
-
-From this dataset we can get counts of lab values per DEPT:
-
-```{r}
-table(cbc.bg$DEPT)
-```
-
-### Distributions
-
-Now we describe the distributions:
-
-- Summary to show quintiles, mean, SD
-- QQ plot for normality
-- Density plot
-- Paired T-Test of the 
-
-```{r}
 #'
 #' @title Describe Paired Distributions
-#' 
-#' @description Descriptive statistics, QQ plots, density plot, and TTest 
-#' 
+#'
+#' @description Descriptive statistics, QQ plots, density plot, and TTest
+#'
 #' @param df The paired data frame of interest
 #' @param PN A 2-element list (matching that from above) of the PROC_NAMEs
 #' @param paired.t If TRUE [Default], uses paired t test
 #' @param to.return If TRUE, returns list of results; otherwise returns NULL [Default]
-#' 
+#'
 #' @returns Pending the above flag, either NULL or list of graphics and t test
 #'
-describePairedDistributions <- function (df, PN, 
+#' @export
+#'
+describePairedDistributions <- function (df, PN,
                                          paired.t = T, to.return = F) {
-  
+
   cat(sprintf('Summary of %s values:\n', PN[1]))
   print(summary(df$NUM_VAL.x))
   cat(sprintf('SD: %0.2f\n', sd(df$NUM_VAL.x)))
-  
+
   # QQ Plot
   p1 <-
     df %>%
@@ -286,7 +174,7 @@ describePairedDistributions <- function (df, PN,
     stat_qq() +
     ggtitle(paste0('Lab Value Distribution QQ Plot: ',PN[1])) +
     theme_bw()
-  
+
   print(p1)
 
   cat(sprintf('Summary of %s values:\n', PN[2]))
@@ -300,9 +188,9 @@ describePairedDistributions <- function (df, PN,
     stat_qq() +
     ggtitle(paste0('Lab Value Distribution QQ Plot: ',PN[2])) +
     theme_bw()
-  
+
   print(p2)
-  
+
   # Create Density Plot
   Density <-
     rbind(
@@ -322,11 +210,11 @@ describePairedDistributions <- function (df, PN,
     scale_fill_brewer(type = 'qual', palette = 6) +
     labs(fill = 'Source') +
     xlab('Hemoglobin (g/dL)') +
-    ylab('Density (Distribution)') + 
+    ylab('Density (Distribution)') +
     theme_bw()
-  
+
   print(Density)
-  
+
   # Paired T-Test
   t.res <-
     t.test(
@@ -335,9 +223,9 @@ describePairedDistributions <- function (df, PN,
       alternative = 'two.sided',
       paired = TRUE
     )
-  
+
   print(t.res)
-  
+
   # Return
   if (to.return) {
     return(list(
@@ -349,64 +237,50 @@ describePairedDistributions <- function (df, PN,
     return()
   }
 }
-```
 
-Describe the primary paired distribution and capture the results, as we will have to save out these images for compilation with other sites.
 
-```{r}
-paired.res <- describePairedDistributions(
-  df = cbc.bg, 
-  PN = c('CBC', 'BG'),
-  paired.t = T,
-  to.return = T
-)
-```
-
-### Correlation
-
-Now we evaluate the correlation among these paired values:
-
-```{r}
 #'
 #' @title Determine Correlation
-#' 
+#'
 #' @description Determine the Pearson Correlation among pairs by DEPT
-#' 
+#'
 #' @param df The labs data frame
 #' @param DPT Either a single DEPT value or a list of values
-#' 
+#'
 #' @returns A list of results containing cor estimates, CI, sample size
 #'
+#' @export
+#'
 determineCorrelation <- function (df, DPT) {
-  
+
   # Filter by the department of interest first
   limited.df <-
     df %>%
     dplyr::filter(DEPT %in% DPT)
-  
+
   cat(sprintf('Number of rows from which correlation is calculated: %d\n',
               nrow(limited.df)))
-  
-  # Calculated from cor, with CIs calculated manually  
+
+  # Calculated from cor, with CIs calculated manually
   cat(sprintf('First we use `cor` function to calculate:\n'))
-  
+
   R <- cor(limited.df$NUM_VAL.x,limited.df$NUM_VAL.y)
   R2 <- R * R
-  
+
   cat(sprintf('\tCorrelation (R): %0.4f\tR^2: %0.4f\n',
               R, R2))
-  
+
   n <- nrow(limited.df)
   k <- 2
-  
+
   SE <- sqrt((4*R2*((1-R2)**2)*((n-k-1)**2))/((n**2-1)*(n + 3)))
 
   cat(sprintf('\tCI: Lower: %0.4f\tUpper: %0.4f\n',
               R2 - 2*SE, R2 + 2*SE))
 
-  # Calculated from cor.test  
+  # Calculated from cor.test
   cat(sprintf('Now we use `cor.test` and `conf.int` to calculate:\n'))
-  
+
   cor.res <-
     cor.test(
       x = limited.df$NUM_VAL.x,
@@ -414,15 +288,15 @@ determineCorrelation <- function (df, DPT) {
       alternative = 'two.sided',
       method = 'pearson'
     )
-  
+
   cat(sprintf('\tCalculated R: %0.4f\tR^2: %0.4f\n',
-              cor.res$estimate, 
+              cor.res$estimate,
               cor.res$estimate * cor.res$estimate))
-  
+
   cat(sprintf('\tCalulated CIs: Lower: %0.4f\tUpper: %0.4f\n',
               cor.res$conf.int[1]*cor.res$conf.int[1],
               cor.res$conf.int[2]*cor.res$conf.int[2]))
-  
+
   return(list(
     cor.est = cor.res$estimate,
     cor.conf.int = cor.res$conf.int,
@@ -430,114 +304,86 @@ determineCorrelation <- function (df, DPT) {
     n = nrow(limited.df)
   ))
 }
-```
 
-Now we compute the Pearson correlations among all pairs, and then subsequently among the different departments. These will be saved out later for comparison between institutions.
-
-```{r}
-pcc.cbc.bg <- determineCorrelation(cbc.bg, c('PICU', 'CICU'))
-pcc.cbc.bg.picu <- determineCorrelation(cbc.bg, 'PICU')
-pcc.cbc.bg.cicu <- determineCorrelation(cbc.bg, 'CICU')
-```
-
-We can compare Pearson correlation coefficients using this function:
-
-```{r}
 #'
 #' @title Compare Pearson Correlations
-#' 
-#' @description Use the Fisher's R to Z transformation and return significance 
-#' 
+#'
+#' @description Use the Fisher's R to Z transformation and return significance
+#'
 #' @param r1 The R value from the first independent correlation
 #' @param n1 The sample size of the first correlation
 #' @param r2 The R value from the second independent correlation
 #' @param n2 The sample size of the second correlation
-#' 
+#'
 #' @returns The p-value
 #'
+#' @export
 #'
 comparePearsonCorrelations <- function (r1, n1, r2, n2) {
-  
+
   z1 <- atanh(r1)
-  
+
   z2 <- atanh(r2)
-  
+
   zobs <- (z1-z2) / sqrt( 1 / (n1-3) + 1 / (n2-3) )
-  
+
   pval <- 2 * pnorm(-abs(zobs))
-  
+
   return(pval)
 }
-```
 
-Compare PICU vs CICU correlations:
 
-```{r}
-cat(sprintf('PICU (R: %0.4f) vs CICU (R: %0.4f): %0.4f\n',
-            pcc.cbc.bg.picu$cor.est,
-            pcc.cbc.bg.cicu$cor.est,
-            comparePearsonCorrelations(
-              r1 = pcc.cbc.bg.picu$cor.est,
-              n1 = pcc.cbc.bg.picu$n,
-              r2 = pcc.cbc.bg.cicu$cor.est,
-              n2 = pcc.cbc.bg.cicu$n
-            )))
-```
-
-### Bland-Altman Analysis
-
-In this section we make use of the package `BlandAltmanLeh` to perform the calculations and generate the statistical results. 
-
-```{r}
 #'
 #' @title Perform Bland Altman Analysis
-#' 
+#'
 #' @description Calculates Bland-Altman statistics and generates plots
-#' 
+#'
 #' @param df The data frame of paired values
 #' @param PN A 2-element list of the PROC Names for comparison
 #' @param DPT A list or single value of the departments of interest
 #' @param pt.size The point size for plotting the B-A plots [Default: 0.8]
 #' @param to.graph If TRUE [Default], displays BA plots
 #' @param to.return If TRUE [Default], returns a list of elements including:
-#' 
+#'
 #' @returns Either a list as denoted above, or NULL if `to.return` is FALSE
+#'
+#' @export
 #'
 performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
                                         to.graph = T, to.return = T) {
-  
+
   # Filter by the department of interest first
   limited.df <-
     df %>%
     dplyr::filter(DEPT %in% DPT)
-  
+
   cat(sprintf('Number of rows from which correlation is calculated: %d\n',
               nrow(limited.df)))
-  
+
   # For ease of subsequent coding, rename vectors:
   x <- limited.df$NUM_VAL.x
   y <- limited.df$NUM_VAL.y
-  
+
   # Run the BA statistics
   stats <-
     BlandAltmanLeh::bland.altman.stats(
       group1 = x,
       group2 = y
     )
-  
+
   # Display results
   cat(sprintf('B-A Analysis of %s - %s in DEPT %s\n',
               PN[1],PN[2],DPT))
-  
+
   cat(sprintf('\tMean difference (bias): %0.4f\n',
               stats$mean.diffs))
-  
+
   cat(sprintf('Limits: [%0.2f, %0.2f]\n',
               stats$lower.limit, stats$upper.limit))
-  
+
   cat(sprintf('CIs of mean and limits:\n'))
   print(stats$CI.lines)
-  
+
   # Make Graph
   mean.diff <- mean( x - y )
   sd.diff <- sd( x - y )
@@ -546,9 +392,9 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
     ggplot() +
     geom_point(aes(x = (x + y) / 2., y = (x - y)), size = pt.size) +
     geom_hline(aes(yintercept = mean.diff), color = 'blue', size = 0.5) +
-    geom_hline(aes(yintercept = mean.diff + (1.96 * sd.diff)), 
+    geom_hline(aes(yintercept = mean.diff + (1.96 * sd.diff)),
                color = 'red', linetype = 'dashed', size = 0.5) +
-    geom_hline(aes(yintercept = mean.diff - (1.96 * sd.diff)), 
+    geom_hline(aes(yintercept = mean.diff - (1.96 * sd.diff)),
                color = 'red', linetype = 'dashed', size = 0.5) +
     xlab('Average Value') +
     ylab('Difference') +
@@ -557,7 +403,7 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
   if (to.graph) {
     print(p)
   }
-  
+
   # Return
   if (to.return) {
     return(
@@ -569,55 +415,22 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
     return()
   }
 }
-```
 
-Perform Bland-Altman, split by department:
-
-```{r}
-ba.all <- performBlandAltmanANalysis(
-  df = cbc.bg, 
-  PN = c('CBC', 'BG'),
-  DPT = c('PICU', 'CICU'),
-  to.graph = T, 
-  to.return = T
-)
-
-ba.picu <- performBlandAltmanANalysis(
-  df = cbc.bg, 
-  PN = c('CBC', 'BG'),
-  DPT = 'PICU',
-  to.graph = T, 
-  to.return = T
-)
-
-ba.cicu <- performBlandAltmanANalysis(
-  df = cbc.bg, 
-  PN = c('CBC', 'BG'),
-  DPT = 'CICU',
-  to.graph = T, 
-  to.return = T
-)
-```
-
-### Time To Result
-
-Next we describe the differences in time-to-result, which is the difference between resulted time and collected time:
-
-```{r}
 #'
 #' @title Describe Time To Result
-#' 
+#'
 #' @description Compares and describes the time to result between PROCs
-#' 
+#'
 #' @param df The labs data frame
 #' @param PN A 2-element list of the PROC NAMEs
 #' @param WILCOX.CI If TRUE, computes Wilcoxon signed rank confidence intervals
-#' 
+#'
 #' @returns A list containing the plot and Wilcoxon results
 #'
+#' @export
 #'
 describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
-  
+
   # Create the Time-To-Result data frame
   time_to_result <-
     rbind(
@@ -632,14 +445,14 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
     )
 
   ttr.quint <- quantile(time_to_result$TTR, c(0.01, 0.99))
-  
+
   # Set the colors on the panel
   panel.colors <- RColorBrewer::brewer.pal(3,"Set1")
-  
+
   src.vec <- vector()
   src.vec[[PN[1]]] <- panel.colors[1]
   src.vec[[PN[2]]] <- panel.colors[2]
-  
+
   # Plot
   TTR.p <-
     time_to_result %>%
@@ -652,13 +465,13 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
     ylab('Density') +
     labs(fill = 'Source') +
     theme_bw()
-  
+
   print(TTR.p)
-  
+
   # Display summary statistics
   cat(sprintf('Summary of Time-To-Result for %s\n', PN[1]))
   print(summary(time_to_result$TTR[time_to_result$SRC == PN[1]]))
-  
+
   cat(sprintf('Summary of Time-To-Result for %s\n', PN[2]))
   print(summary(time_to_result$TTR[time_to_result$SRC == PN[2]]))
 
@@ -670,9 +483,9 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
     stat_qq() +
     ggtitle(paste0('TTR QQ Plot: ',PN[1])) +
     theme_bw()
-  
+
   print(p1)
-  
+
   p2 <-
     time_to_result %>%
     dplyr::filter(SRC == PN[2]) %>%
@@ -680,9 +493,9 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
     stat_qq() +
     ggtitle(paste0('TTR QQ Plot: ',PN[2])) +
     theme_bw()
-  
+
   print(p2)
-  
+
   # Determine significant difference by non-parametric Wilcoxon signed rank test
   # Note that we use paired statistics here because these are paired samples
   wilcox.res <-
@@ -693,103 +506,53 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
       paired = TRUE,
       conf.int = WILCOX.CI
     )
-  
+
   print(wilcox.res)
-  
+
   # Return
   return(list(
     plot = TTR.p,
     wilcox.res = wilcox.res
   ))
 }
-```
 
-Capture the graphic so that we can save it out:
-
-```{r}
-TTR.p <- describeTimeToResult(
-  df = cbc.bg, 
-  PN = c('CBC', 'BG'),
-  WILCOX.CI = F
-)
-```
-
-### Save Out
-
-Save out our primary cutoff analytic data, for use when combining with other sites. 
-
-```{r}
-save(
-  file = file.path(
-    Sys.getenv('PICU_LAB_DATA_PATH'),
-    paste0(
-      Sys.getenv('PICU_LAB_SITE_NAME'),
-      '_pri_cbc_bg_analytic_',
-      run.date, '.rData'
-    )
-  ),
-  primary.cutoff,
-  paired.res,
-  pcc.cbc.bg, pcc.cbc.bg.picu, pcc.cbc.bg.cicu,
-  ba.all, ba.picu, ba.cicu,
-  TTR.p
-)
-```
-
-```{r, echo=FALSE}
-# Remove some of the produced variables, so we don't accidentally use them below
-rm(paired.res, pcc.cbc.bg, pcc.cbc.bg.picu, pcc.cbc.bg.cicu, TTR.p)
-rm(ba.all, ba.picu, ba.cicu)
-rm(cbc.bg)
-```
-
-## CBC vs ISTAT
-
-If the lab results data frame contains ISTAT results, we must also complete those analyses. Using the functions written above, all of those are collapsed into a single function (below). Inside this function we:
-
-- Create the paired dataset from the labs data frame
-- Count values by department
-- Describe the paired distribtions
-- Determine correlations
-- Calculate time-to-result (though this is *not* used in POC tests)
-- Save data file
-
-```{r}
 #'
 #' @title Run All Analytic
 #'
 #' @description Runs through all analytic analyses, for sensitivity analyses
-#' 
+#'
 #' @param labs.df The original labs data frame
 #' @param cohort.df The original cohort data frame
 #' @param compare.PN The comparison PROC name (e.g. either `BG` or `ISTAT`)
-#' @param time.diff The cutoff time difference (in minutes) for determining 
+#' @param time.diff The cutoff time difference (in minutes) for determining
 #'     whether labs are "simultaneous"
-#' @param multi.per.pt If TRUE, allows all results from patients; 
+#' @param multi.per.pt If TRUE, allows all results from patients;
 #'     If FALSE, only the first (chronological) result from a patient is included
 #' @param run.date A string representation of date for saving (format: %Y-%m-%d)
-#' @param save.fn The file name (which will be concatenated with SITE and run.date), 
+#' @param save.fn The file name (which will be concatenated with SITE and run.date),
 #'     or NA [Default] if we do not wish to save any results to a file
-#'     
-runAllAnalytic <- function (labs.df, cohort.df, compare.PN, 
-                         time.diff, multi.per.pt, run.date, save.fn = NA) {
-  
+#'
+#' @export
+#'
+runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
+                            time.diff, multi.per.pt, run.date, save.fn = NA) {
+
   # Create paired dataset
   paired.df <- createPairedDataset(
-    labs.df = labs.df, 
+    labs.df = labs.df,
     cohort.df = cohort.df,
-    PN = c('CBC', compare.PN), 
+    PN = c('CBC', compare.PN),
     CN = 'Hgb',
     time.diff = time.diff,
     multi.per.pt = multi.per.pt
   )
-  
+
   # Counts by department
   print(table(paired.df$DEPT))
-  
+
   # Describe paired distribution
   paired.res <- describePairedDistributions(
-    df = paired.df, 
+    df = paired.df,
     PN = c('CBC', compare.PN),
     paired.t = T,
     to.return = T
@@ -799,7 +562,7 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
   pcc <- determineCorrelation(paired.df, c('PICU', 'CICU'))
   pcc.picu <- determineCorrelation(paired.df, 'PICU')
   pcc.cicu <- determineCorrelation(paired.df, 'CICU')
-  
+
   cat(sprintf('PICU (R: %0.4f) vs CICU (R: %0.4f): %0.4f\n',
               pcc.picu$cor.est,
               pcc.cicu$cor.est,
@@ -812,36 +575,36 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
 
   # Bland Altman Analysis
   ba.all <- performBlandAltmanANalysis(
-    df = paired.df, 
+    df = paired.df,
     PN = c('CBC', compare.PN),
     DPT = c('PICU', 'CICU'),
-    to.graph = T, 
-    to.return = T
-  )
-  
-  ba.picu <- performBlandAltmanANalysis(
-    df = paired.df, 
-    PN = c('CBC', compare.PN),
-    DPT = 'PICU',
-    to.graph = T, 
-    to.return = T
-  )
-  
-  ba.cicu <- performBlandAltmanANalysis(
-    df = paired.df, 
-    PN = c('CBC', compare.PN),
-    DPT = 'CICU',
-    to.graph = T, 
+    to.graph = T,
     to.return = T
   )
 
-  # Time-to-result  
+  ba.picu <- performBlandAltmanANalysis(
+    df = paired.df,
+    PN = c('CBC', compare.PN),
+    DPT = 'PICU',
+    to.graph = T,
+    to.return = T
+  )
+
+  ba.cicu <- performBlandAltmanANalysis(
+    df = paired.df,
+    PN = c('CBC', compare.PN),
+    DPT = 'CICU',
+    to.graph = T,
+    to.return = T
+  )
+
+  # Time-to-result
   TTR.p <- describeTimeToResult(
     df = paired.df,
     PN = c('CBC', compare.PN),
     WILCOX.CI = F
   )
-  
+
   # Save out?
   if (! any(is.na(save.fn)) ) {
     save(
@@ -861,78 +624,7 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
     )
   }
 }
-```
 
-Now we run for the POC values using the primary cutoff, allowing all results per patient (if the PROC exists):
 
-```{r}
-if ('ISTAT' %in% unique(labs.df$PROC_NAME)) {
-  
-  runAllAnalytic(
-    labs.df,
-    cohort.df, 
-    compare.PN = 'ISTAT',
-    time.diff = primary.cutoff,
-    multi.per.pt = T,
-    run.date = run.date,
-    save.fn = 'pri_cbc_istat_analytic'
-  )
 
-}
-```
 
-## Sensitivity Analyses
-
-Now we complete some of the same above measures using different permutations, as sensitivity analyses.
-
-### Single Value per Patient
-
-First we change the parameters to require a single value per patient. We run this across both BG and ISTAT pairs (if they exist).
-
-```{r}
-for (proc.option in c('BG', 'ISTAT')) {
-  
-  if (proc.option %in% unique(labs.df$PROC_NAME)) {
-    
-    runAllAnalytic(
-      labs.df,
-      cohort.df, 
-      compare.PN = proc.option,
-      time.diff = primary.cutoff,
-      multi.per.pt = F, # This is the change in this section
-      run.date = run.date,
-      save.fn = paste0('single_pt_cbc_', tolower(proc.option), '_analytic')
-    )
-    
-  }
-}
-```
-
-### Time Threshold
-
-Now we change parameters to alter the cutoff (min) between labs that get counted as "simultaneous" labs. We revert back to allowing multiple values per patient. We run this across both BG and ISTAT pairs (if they exist), across all `sens.cutoffs` values.
-
-```{r}
-for (cutoff in sens.cutoffs) {
-
-  for (proc.option in c('BG', 'ISTAT')) {
-    
-    if (proc.option %in% unique(labs.df$PROC_NAME)) {
-      
-      runAllAnalytic(
-        labs.df,
-        cohort.df, 
-        compare.PN = proc.option,
-        time.diff = cutoff,
-        multi.per.pt = T, 
-        run.date = run.date,
-        save.fn = NA
-      )
-      
-    } # If the PROC exists
-    
-  } # Across BG vs ISTAT
-  
-} # Across cutoffs
-```
-  

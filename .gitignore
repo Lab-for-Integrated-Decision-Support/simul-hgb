@@ -8,6 +8,9 @@
 # Markdown HTML files
 *.html
 
+# Man pages
+*.Rd
+
 # User-specific files
 .Ruserdata
 

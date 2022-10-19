@@ -1,0 +1,6 @@
+# Binary packages
+*.zip
+
+# Source packages
+*.tar.gz
+*.tar
