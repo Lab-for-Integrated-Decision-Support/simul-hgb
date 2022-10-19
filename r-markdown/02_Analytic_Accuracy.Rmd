@@ -768,7 +768,7 @@ If the lab results data frame contains ISTAT results, we must also complete thos
 #' @param multi.per.pt If TRUE, allows all results from patients; 
 #'     If FALSE, only the first (chronological) result from a patient is included
 #' @param run.date A string representation of date for saving (format: %Y-%m-%d)
-#' @param save.fn The file name (which will be concated with SITE and run.date), 
+#' @param save.fn The file name (which will be concatenated with SITE and run.date), 
 #'     or NA [Default] if we do not wish to save any results to a file
 #'     
 runAllAnalytic <- function (labs.df, cohort.df, compare.PN, 

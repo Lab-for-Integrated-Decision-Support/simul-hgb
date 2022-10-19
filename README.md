@@ -80,7 +80,7 @@ The functions in this markdown are:
 
 Next, move on to the Analytic analysis which can be found in `02_Analytic_Accuracy.Rmd`. This markdown creates the paired dataset by specifying the cutoff time and whether we include repeated measures from the same patient. This paired dataset is then used to view the data distributions, correlations, Bland-Altman, and time-to-result.
 
-Depending on the PROCs in the datset, there will be numerous file outputs from this markdown. These include:
+Depending on the PROCs in the dataset, there will be numerous file outputs from this markdown. These include:
 
 + `<SITE>_pri_cbc_bg_analytic_<date>.rData` - CBC-BG analysis using primary cutoff
 + `<SITE>_pri_cbc_istat_analytic_<date>.rData` - CBC-ISTAT analysis using primary cutoff
@@ -101,7 +101,12 @@ The functions in this markdown are:
 
 Next, move on to Clinical accuracy analysis found in `03_Clinical_Accuracy.Rmd`. In this markdown we create the paired dataset using a copy of the function found in the prior script. (N.B. - although convention dictates that code duplication is never appropriate, in this case it allows us to keep the function within the markdown file during development. After development, the function was pulled out to a package. Care was taken to ensure that both "versions" of the function were kept identical.) The paired dataset is then used to complete error grid analysis, regression, Cohen's Kappa, as well as "testS" of similarity. 
 
-The output data files from this markdown include:
+Depending on the PROCs in the dataset, the output data files from this markdown include:
+
++ `<SITE>_pri_cbc_bg_clinical_<date>.rData` - CBC-BG analysis using primary cutoff
++ `<SITE>_pri_cbc_istat_clinical_<date>.rData` - CBC-ISTAT analysis using primary cutoff
++ `<SITE>_single_pt_cbc_bg_clinical_<date>.rData` - CBC-BG with one value per patient
++ `<SITE>_single_pt_cbc_istat_clinical_<date>.rData` - CBC-ISTAT with one value per patient
 
 The functions in this markdown are:
 
@@ -110,4 +115,7 @@ The functions in this markdown are:
 + `gatherCovariates` : Creates pivoted data frame of covariate labs for each pair
 + `displayCovariateStats` : Displays statistics on covariates in the data frame
 + `joinImputeRegress` : Join covars and pairs, impute NA values, regress, and report results
-
++ `calculateCohenKappa` : Calculates the Cohen Kappa statistic for two vectors of CN values
++ `transfusionConfusionMatrix` : Creates a 2x2 confusion matrix for a pair of cutoffs and direction
++ `calculateThresholdROC` : Calculates an ROC and P-R based on Transfusion "Test"
++ `runAllClinical` : Runs through all clinical accuracy tasks, for sensitivity analysis

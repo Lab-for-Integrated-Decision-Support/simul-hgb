@@ -25,8 +25,7 @@ suppressPackageStartupMessages({
   
   # Graphics and output
   require(ggplot2)
-  #require(cowplot)
-  
+
   # Tables
   require(knitr)
   require(kableExtra)
@@ -81,7 +80,7 @@ sens.cutoffs <- c(1., 30., 90.)
 # Hgb cutoffs
 primary.hgb.cutoff <- 7.0
 
-sens.hgb.cutoffs <- c(5., 9.)
+sens.hgb.cutoffs <- c(5.0, 9.0)
 ```
 
 ## Join
@@ -819,32 +818,35 @@ rm(thresh)
 
 In this section, we ask the question, "If the BG Hgb value is greater than X, what is the likelihood that the CBC Hgb is less than Y?" for an appropriate transfusion threshold Y.
 
-Similarly, we can ask the question, "If the BG Hgb value is less than X, what is the likelihood that the CBC Hgb is greater than Y?" for the same set of transfusion thresholds.
+Similarly, we can ask the question, "If the BG Hgb value is less than X, what is the likelihood that the CBC Hgb is greater than Y?" for the same set of transfusion thresholds. 
 
-First we create the function to calculate the 2x2 matrix for this test:
+First we create the function to calculate the 2x2 matrix for this test. The "gold standard" is the PN[1] value, most often CBC. The "test" is the PN[2] value, either BG or iSTAT. In words:
+
+- The TP cell includes those where both the CBC and BG are below their cutoff values
+- The FP cell includes those where the BG is below the cutoff, but the CBC is not (not actually anemic)
+- The FN cell includes those where the BG is above the cutoff, but the CBC is below (actually anemic)
+- The TN cell includes those where both BG and CBC are above their cutoff
+
+In this way, the "sensitivity" is the percent of actually anemic patients identified correctly by the test. The PPV is the percent of patients identified by the test as anemic who are actually anemic (and is dependent on the incidence of anemia in our population). 
 
 ```{r}
-.lt <- function (a,b) { return (a < b) }
-.lte <- function (a,b) { return (a <= b) }
-.gt <- function (a,b) { return (a > b) }
-.gte <- function (a,b) { return (a >= b) }
-
 #'
 #' @title Transfusion Confusion Matrix
 #' 
 #' @description Creates a 2x2 confusion matrix for a pair of cutoffs and direction
 #' 
-#' @param value.x
-#' @param value.y
+#' @param value.x The value of PN[1] elements (typically CBC)
+#' @param value.y The value of PN[2] elements (typically BG or iSTAT)
 #' @param cutoffs A two-element vector which specifies the cutoffs for PN[1] 
 #'     (which is typically the gold standard CBC) and for PN[2] (typically the
 #'     "test" BG or iStat)
-#' 
+#' @param to.print If TRUE, prints results [Default]
+#' @param to.return If TRUE, returns results [Default]
 #'
 transfusionConfusionMatrix <- function (value.x, value.y,
                                   cutoffs = c(7., 7.),
-                                  direction = .lt,
-                                  to.print = T) {
+                                  to.print = T,
+                                  to.return = T) {
 
   # Are the lengths equal
   stopifnot(length(value.x) == length(value.y))
@@ -852,23 +854,6 @@ transfusionConfusionMatrix <- function (value.x, value.y,
   # Is `cutoffs` a two-element vector?
   stopifnot(length(cutoffs) == 2)
 
-  # Helper function to determine if two functions are identical
-  sameDefinition <- function(x, y) { 
-
-    stopifnot( is.function(x) )
-    stopifnot( is.function(y) )
-
-    identical(all.equal(x, y), TRUE)
-  } 
-  
-  # Check the `direction` parameter
-  if (sameDefinition(direction, .lt))
-    opp.direction <- .gte
-  else if (sameDefinition(direction, .gt))
-    opp.direction <- .lte
-  else
-    stop('Direction function must either be `.lt` or `.gt` functions')
-  
   if (to.print)
     cat(sprintf('Total number of input rows: %d\n',length(value.x)))
 
@@ -888,22 +873,22 @@ transfusionConfusionMatrix <- function (value.x, value.y,
   
   if (to.print)
     cat(sprintf('Gold Standard:\n\tPositive: %d (%0.2f %%)\n\tNegative: %d (%0.2f %%)\n',
-                sum( direction(value.x, cutoffs[1]) ),
-                sum( direction(value.x, cutoffs[1]) ) / length(value.x) * 100.,
-                sum( opp.direction(value.x, cutoffs[1]) ),
-                sum( opp.direction(value.x, cutoffs[1]) ) / length(value.x) * 100.))
+                sum( value.x < cutoffs[1] ),
+                sum( value.x < cutoffs[1] ) / length(value.x) * 100.,
+                sum( value.x >= cutoffs[1] ),
+                sum( value.x >= cutoffs[1] ) / length(value.x) * 100.))
   
   # Rater A - yes, Rater B - yes
-  TP <- sum( direction(value.x, cutoffs[1]) & direction(value.y, cutoffs[2]) )
+  TP <- sum( (value.x < cutoffs[1]) & (value.y < cutoffs[2]) )
 
   # Rater A - yes, Rater B - no
-  FP <- sum( opp.direction(value.x, cutoffs[1]) & direction(value.y, cutoffs[2]) )
+  FP <- sum( (value.x >= cutoffs[1]) & (value.y < cutoffs[2]) )
 
   # Rater A - no, Rater B - yes
-  FN <- sum( direction(value.x, cutoffs[1]) & opp.direction(value.y, cutoffs[2]) )
+  FN <- sum( (value.x < cutoffs[1]) & (value.y >= cutoffs[2]) )
 
   # Rater A - no, Rater B - no
-  TN <- sum( opp.direction(value.x, cutoffs[1]) & opp.direction(value.y, cutoffs[2]) )
+  TN <- sum( (value.x >= cutoffs[1]) & (value.y >= cutoffs[2]) )
 
   # Dummy check - do these all add up to total length
   stopifnot(TP+FP+TN+FN == length(value.x))
@@ -924,24 +909,246 @@ transfusionConfusionMatrix <- function (value.x, value.y,
       'PPV: %0.4f\n',
       'NPV: %0.4f\n',
       'FOR (1-NPV): %0.4f\n',
-      'NNM (1/FOR): %0.4f\n'),
+      'NNM (1/FOR): %0.4f\n\n'),
       TP, TP / length(value.x) * 100.,
       FP, FP / length(value.x) * 100.,
       FN, FN / length(value.x) * 100.,
       TN, TN / length(value.x) * 100.,
       sens, spec, ppv, npv, (1. - npv), 1. / (1. - npv)
     ))
+  
+  if (to.return) {
+    return(list(
+      cutoffs = cutoffs,
+      TP = TP, FP = FP, TN = TN, FN = FN,
+      sens = sens, spec = spec, ppv = ppv, npv = npv,
+      falseOR = 1. - npv, 
+      nnm = 1. / (1. - npv)
+    ))
+  }
 }
 ```
 
+We can run this across a few standard values:
+
 ```{r}
-transfusionConfusionMatrix(
-  value.x = cbc.bg$NUM_VAL.x,
-  value.y = cbc.bg$NUM_VAL.y,
-  cutoffs = c(7., 7.),
-  direction = .lt,
-  to.print = T
-)
+for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0))
+  
+  transfusionConfusionMatrix(
+    value.x = cbc.bg$NUM_VAL.x,
+    value.y = cbc.bg$NUM_VAL.y,
+    cutoffs = c(primary.hgb.cutoff, pn2.cutoff),
+    to.print = T,
+    to.return = F
+  )
+
+rm(pn2.cutoff)
+```
+
+The above function can be run across a range of cutoff values to generate both an ROC and a P-R curve, which give information about the "performance" of the test - either BG or iStat. We can calculate the AUROC and the optimal test thresholds (as the points closest to 0,1).
+
+```{r}
+#'
+#' @title Calculate Threshold ROC
+#' 
+#' @description Calculates an ROC and P-R based on Transfusion "Test"  
+#' 
+#' @details This function makes use of the above `transfusionConfusionMatrix` 
+#'     function, which returns a sensitivity and specificity at a given pair
+#'     of thresholds - the CBC threshold (PN[1]) and the PN[2] threshold
+#'     (either BG or ISTAT). 
+#'     
+#'     By generating confusion matrices across a range of test PN[2] 
+#'     thresholds (default from 0 g/dL to 25 g/dL, the full range of Hgb), at
+#'     both "low" and "high" CBC Hgb thresholds (5 g/dL and 7 g/dL), we can 
+#'     generate ROC curves as well as P-R curves for these two conditions
+#'     (low, high). These curves represent the ability of the "test" values 
+#'     (either BG or iStat) to discriminate the "true" condition of anemia
+#'     as defined by a given threshold (low, 5 or high, 7). 
+#'     
+#'     We calculate the AUROC using trapezoidal (numeric) integration. We can 
+#'     also identify the "optimal" threshold to use to maximize sensitivity 
+#'     and specificity by minimizing the Euclidian distance to the point (0,1) 
+#'     on the ROC curve. 
+#'     
+#'     Similarly, on the P-R curve, we can visualize the tradeoff between 
+#'     precision (PPV) and recall (sensitivity). In this situation, 
+#'     precision refers to the % of test values below a threshold which
+#'     represent actual anemia (or actual TPs), and is dependent on the 
+#'     incidence of anemia in the population. Recall (sensitivity) represents
+#'     the % of actually anemic patients which are identified by the "test" Hgb.
+#'
+#' @param paired.df The paired data frame containing `value.x` and `value.y`
+#' @param to.print If TRUE, prints results [Default]
+#' @param to.return If TRUE, returns results as a list of elements [Default]
+#' @param cutoff.minmax A two-element vector of the minimum and maximum Hgb 
+#'     values used to generate the full cutoff sequence [Default: 0., 25.]
+#' @param cutoff.by The difference between successive values in the cutoff seq
+#' 
+calculateThresholdROC <- function (paired.df, 
+                                   to.print = T, to.return = T,
+                                   cutoff.minmax = c(0., 25.),
+                                   cutoff.by = 0.1) {
+  
+  # Establish the sequence for iterating through the threshold calculation
+  cutoff.range <- seq(
+    from = cutoff.minmax[1], 
+    to = cutoff.minmax[2], 
+    by = cutoff.by
+  )
+  
+  # Define the empty result data frame
+  roc.df <- data.frame()
+  
+  # Loop through the cutoff range
+  for (index in 1 : length(cutoff.range)) {
+    
+    # First calculate using the "high" CBC (or PN[1]) value, 7.0
+    res.high <-
+      transfusionConfusionMatrix(
+        value.x = paired.df$NUM_VAL.x,
+        value.y = paired.df$NUM_VAL.y,
+        cutoffs = c(7., cutoff.range[index]),
+        to.print = F,
+        to.return = T
+      )
+    
+    # Now calculate using the "low" CbC (or PN[1]) value, 5.0
+    res.low <-
+      transfusionConfusionMatrix(
+        value.x = paired.df$NUM_VAL.x,
+        value.y = paired.df$NUM_VAL.y,
+        cutoffs = c(5., cutoff.range[index]),
+        to.print = F,
+        to.return = T
+      )
+    
+    # RBind to the data frame
+    roc.df <-
+      rbind(
+        roc.df,
+        data.frame(
+          tpr = res.high$sens,
+          fpr = 1.0 - res.high$spec,
+          precision = res.high$ppv,
+          recall = res.high$sens,
+          cbc.cutoff = 'High (7.0 g/dL)',
+          bg.cutoff = cutoff.range[index]
+        ),
+        data.frame(
+          tpr = res.low$sens,
+          fpr = 1.0 - res.low$spec,
+          precision = res.low$ppv,
+          recall = res.low$sens,
+          cbc.cutoff = 'Low (5.0 g/dL)',
+          bg.cutoff = cutoff.range[index]
+        )
+      )
+  }
+  
+  # Trapezoidal integration to determine AUROC values
+  auroc <-
+    roc.df %>%
+    dplyr::group_by(cbc.cutoff) %>%
+    dplyr::mutate(
+      diff.fpr = lead(fpr) - fpr
+    ) %>%
+    dplyr::filter(!is.na(diff.fpr)) %>%
+    dplyr::mutate(
+      mult = diff.fpr * tpr
+    ) %>% 
+    dplyr::summarize(
+      AUROC = sum(mult)
+    )
+  
+  # Display results of trapezoidal integration
+  if (to.print) {
+    print(
+      knitr::kable(
+        auroc,
+        col.names = c('CBC Cutoff', 'AUROC'),
+        digits = c(0,3)
+      ) %>%
+        kableExtra::kable_paper("hover")
+    )
+  }
+  
+  # Identify optimum distance to point (0,1) by Euler's distance
+  opt.cutoff <-
+    roc.df %>%
+    dplyr::mutate(
+      dist = sqrt( (1. - tpr) ^ 2 + (fpr) ^ 2 )
+    ) %>%
+    dplyr::arrange(cbc.cutoff, dist) %>%
+    dplyr::group_by(cbc.cutoff) %>%
+    dplyr::summarize(
+      DIST = first (dist),
+      CUTOFF = first(bg.cutoff),
+      SENS = first(tpr),
+      SPEC = 1. - first(fpr)
+    )
+  
+  if (to.print)
+    print(
+      knitr::kable(
+        opt.cutoff,
+        col.names = c('CBC Cutoff', 'Distance', 'Cutoff', 'Sens', 'Spec'),
+        digits = c(0, 3, 1, 3, 3)
+      ) %>%
+        kableExtra::kable_paper("hover")
+    )
+  
+  # Plot ROC curve
+  p.roc <-
+    roc.df %>%
+    ggplot(aes(x = fpr, y = tpr, color = cbc.cutoff)) +
+    geom_point(size = 2) + 
+    geom_line(size = 1.2) +
+    annotate('segment', x = 0, xend = 1, y = 0, yend = 1, color = '#666666', linetype = 'dashed') +
+    xlab('False positive rate (1 - spec)') +
+    ylab('True positive rate (sens)') +
+    labs(color = 'CBC Cutoff') +
+    theme_bw() +
+    theme(legend.position = c(.6,.3))
+
+  if (to.print)
+    print(p.roc)
+  
+  # Plot Precision Recall curve
+  p.pr <-
+    roc.df %>%
+    ggplot(aes(x = recall, y = precision, color = cbc.cutoff)) +
+    geom_point(size = 2) + 
+    geom_line(size = 1.2) +
+    xlim(0,1) + ylim(0,1) +
+    xlab('Recall (sens)') +
+    ylab('Precision (ppv)') +
+    labs(color = 'CBC Cutoff') +
+    theme_bw() +
+    theme(legend.position = c(.8,.9))
+  
+  if (to.print)
+    print(p.pr)
+
+  if (to.return)
+    return(list(
+      auroc = auroc,
+      opt.cutoff = opt.cutoff,
+      p.roc = p.roc, 
+      p.pr = p.pr,
+      roc.df = roc.df
+    ))
+}
+```
+
+We do this for a standard range and save / print the results:
+
+```{r, fig.width = 6, fig.height = 6}
+cbc.bg.thresh.roc <- calculateThresholdROC(
+  paired.df = cbc.bg,
+  to.print = T,
+  to.return = T,
+  cutoff.by = 0.01)
 ```
 
 ### Save Analyses
@@ -962,13 +1169,15 @@ save(
   cbc.bg, covars.df, 
   error.grid.cbc.bg,
   thresh.list, regress.res,
-  primary.hgb.cutoff
+  primary.hgb.cutoff, cbc.bg.thresh.roc
 )
 ```
 
 ```{r, echo=FALSE}
 rm(covars.df, cbc.bg, error.grid.cbc.bg, thresh.list, regress.res)
+rm(cbc.bg.thresh.roc)
 ```
+
 ## CBC vs iSTAT
 
 Here we re-do the clinical accuracy analyses across CBC vs POC (iStat) procedures. To do this, we first (again) define a function that runs all of the above work - similar to in `02_Analytic_Accuracy.Rmd`, except this function is termed `runAllClinical()`. 
@@ -977,16 +1186,223 @@ Here we re-do the clinical accuracy analyses across CBC vs POC (iStat) procedure
 #'
 #' @title Run All Clinical
 #' 
-#' @description ...
+#' @description Runs through all clinical accuracy tasks, for sensitivity analysis
+#' 
+#' @param labs.df The original labs data frame
+#' @param cohort.df The original cohort data frame
+#' @param compare.PN The comparison PROC name (e.g. either `BG` or `ISTAT`)
+#' @param time.diff The cutoff time difference (in minutes) for determining 
+#'     whether labs are "simultaneous"
+#' @param multi.per.pt If TRUE, allows all results from patients; 
+#'     If FALSE, only the first (chronological) result from a patient is included
+#' @param primary.hgb.cutoff The primary Hgb cutoff to use for Cohen's Kappa 
+#' @param sens.hgb.cutoffs The secondary Hgb cutoffs for sensitivity analysis
+#' @param run.date A string representation of date for saving (format: %Y-%m-%d)
+#' @param save.fn The file name (which will be concatenated with SITE and run.date), 
+#'     or NA [Default] if we do not wish to save any results to a file
 #'
-runAllClinical <- function () {
+runAllClinical <- function (labs.df, cohort.df, compare.PN,
+                            time.diff, multi.per.pt, primary.hgb.cutoff,
+                            sens.hgb.cutoffs, run.date, save.fn = NA) {
+
+  # Generate the paired dataset
+  paired.df <- createPairedDataset(
+    labs.df = labs.df, 
+    cohort.df = cohort.df,
+    PN = c('CBC', compare.PN), 
+    CN = 'Hgb',
+    time.diff = time.diff,
+    multi.per.pt = multi.per.pt
+  )
   
+  # Calculate and display the error grid
+  error.grid <- calculateErrorGrid(
+    df = paired.df,
+    to.plot = T,
+    to.return = T
+  )
+
+  # Gather covariates for this paired set
+  covars.df <- gatherCovariates(paired.df, labs.df)
+
+  # Display summaries of those covars
+  displayCovariateStats(covars.df)
+
+  # Threshold lists are a list of three-element vectors, which the three elements
+  # corresponding to: min, max, threshold
+  # This can be read as, between the min and max, the mean diff must be less than 
+  # the threshold, otherwise it is not `WELL_MATCHED`
+  thresh.list <-
+    list(
+      c(-100, 6, 1.5),
+      c(6, 9, 1.0),
+      c(9, 100, 1.5)
+    )
+
+  # Join, impute, and run regression on these pairs
+  regress.res <-
+    joinImputeRegress(
+      paired.df = paired.df,
+      covars.df = covars.df,
+      thresh.list = thresh.list,
+      impute.fx = median,
+      ci = F
+    )
+
+
+  # Calculate the Cohen's Kappa, both at primary and sensitivity hgb cutoffs
+  calculateCohenKappa(
+    values.x = paired.df$NUM_VAL.x,
+    values.y = paired.df$NUM_VAL.y,
+    cutoff = primary.hgb.cutoff,
+    to.print = T
+  )
+
+  for (thresh in sens.hgb.cutoffs) {
+    
+    calculateCohenKappa(
+      values.x = paired.df$NUM_VAL.x,
+      values.y = paired.df$NUM_VAL.y,
+      cutoff = thresh,
+      to.print = T
+    )
+    
+  }
   
+  rm(thresh)
+
+  # Compute Transfusion Confusion Matrix at a range of PN[2] cutoff values
+  for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0))
+    
+    transfusionConfusionMatrix(
+      value.x = paired.df$NUM_VAL.x,
+      value.y = paired.df$NUM_VAL.y,
+      cutoffs = c(primary.hgb.cutoff, pn2.cutoff),
+      to.print = T,
+      to.return = F
+    )
   
+  rm(pn2.cutoff)
+
+  # And calculate the ROC and P-R curves 
+  cbc.bg.thresh.roc <- calculateThresholdROC(
+    paired.df = paired.df,
+    to.print = T,
+    to.return = T,
+    cutoff.by = 0.01)
+
+  # Save out?
+  if (! any(is.na(save.fn)) ) {
+    save(
+      file = file.path(
+        Sys.getenv('PICU_LAB_DATA_PATH'),
+        paste0(
+          Sys.getenv('PICU_LAB_SITE_NAME'),
+          '_', save.fn, '_',
+          run.date, '.rData'
+        )
+      ),
+      primary.cutoff,
+      paired.df, covars.df, 
+      error.grid,
+      thresh.list, regress.res,
+      primary.hgb.cutoff, cbc.bg.thresh.roc
+    )
+  }
+}
+```
+
+```{r, echo=FALSE, eval=FALSE}
+# Test this function based on our prior (individual) computations
+runAllClinical(
+  labs.df,
+  cohort.df, 
+  compare.PN = 'BG',
+  time.diff = primary.cutoff,
+  multi.per.pt = T,
+  primary.hgb.cutoff = primary.hgb.cutoff,
+  sens.hgb.cutoffs = sens.hgb.cutoffs,
+  run.date = run.date,
+  save.fn = NA
+)
+```
+
+Now we run for the POC values using the primary cutoff, allowing all results per patient (if the PROC exists):
+
+```{r}
+if ('ISTAT' %in% unique(labs.df$PROC_NAME)) {
+  
+  runAllClinical(
+    labs.df,
+    cohort.df, 
+    compare.PN = 'ISTAT',
+    time.diff = primary.cutoff,
+    multi.per.pt = T,
+    primary.hgb.cutoff = primary.hgb.cutoff,
+    sens.hgb.cutoffs = sens.hgb.cutoffs,
+    run.date = run.date,
+    save.fn = 'pri_cbc_istat_clinical'
+  )
+
 }
 ```
 
 ## Sensitivity Analyses
 
+Now we complete some of the same above measures using different permutations, as sensitivity analyses (same as we did in `02_Analytic_Accuracy.Rmd`).
 
+### Single Value per Patient
+
+First we change the parameters to require a single value per patient. We run this across both BG and ISTAT pairs (if they exist).
+
+```{r}
+for (proc.option in c('BG', 'ISTAT')) {
+  
+  if (proc.option %in% unique(labs.df$PROC_NAME)) {
+    
+    runAllClinical(
+      labs.df,
+      cohort.df, 
+      compare.PN = proc.option,
+      time.diff = primary.cutoff,
+      multi.per.pt = F, # This is the change in this section
+      primary.hgb.cutoff = primary.hgb.cutoff,
+      sens.hgb.cutoffs = sens.hgb.cutoffs,
+      run.date = run.date,
+      save.fn = paste0('single_pt_cbc_', tolower(proc.option), '_clinical')
+    )
+
+  }
+}
+```
+
+### Time Threshold
+
+Now we change parameters to alter the cutoff (min) between labs that get counted as "simultaneous" labs. We revert back to allowing multiple values per patient. We run this across both BG and ISTAT pairs (if they exist), across all `sens.cutoffs` values.
+
+```{r}
+for (cutoff in sens.cutoffs) {
+
+  for (proc.option in c('BG', 'ISTAT')) {
+    
+    if (proc.option %in% unique(labs.df$PROC_NAME)) {
+      
+      runAllClinical(
+        labs.df,
+        cohort.df, 
+        compare.PN = proc.option,
+        time.diff = cutoff,
+        multi.per.pt = T,
+        primary.hgb.cutoff = primary.hgb.cutoff,
+        sens.hgb.cutoffs = sens.hgb.cutoffs,
+        run.date = run.date,
+        save.fn = NA
+      )
+
+    } # If the PROC exists
+    
+  } # Across BG vs ISTAT
+  
+} # Across cutoffs
+```
 
