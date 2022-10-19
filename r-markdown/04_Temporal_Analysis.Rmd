@@ -1,0 +1,66 @@
+---
+title: "04_Temporal_Analysis"
+author: "Adam Dziorny"
+date: '2022-10-19'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+The purpose of this markdown is to describe the temporal components of simultaneous Hgb pairs. This is in direct response to the reviewer's calls for examining "change over time" of Hgb variables. In this markdown we look at counts of repeated measures per patient (which we have been filtering out during sensitivity analysis in `02` and `03`), and we look at change over time across tests.
+
+## Initialize
+
+First we load the necessary packages:
+
+```{r, warning=FALSE}
+suppressPackageStartupMessages({
+  
+  # Data frame manipulation
+  require(dplyr)
+  
+  # Graphics and output
+  require(ggplot2)
+
+  # Tables
+  require(knitr)
+  require(kableExtra)
+  
+  # Error grid point allocation
+  require(ptinpoly)
+
+})
+```
+
+Ensure the environmental variables are specified:
+
+```{r}
+if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
+    Sys.getenv('PICU_LAB_IMG_PATH') == '' |
+    Sys.getenv('PICU_LAB_IN_FILE') == '' |
+    Sys.getenv('PICU_LAB_SITE_NAME') == '')
+  stop('Missing necessary environmental variables - see README.md')
+```
+
+Specify the run date:
+
+```{r}
+run.date <- '2022-10-05'
+```
+
+## Data Input
+
+Load data from the `DATA_PATH` with the associated `IN_FILE`, adding a file separator between them. This should result in loading two data frames: `cohort.df` and `labs.df`.
+
+```{r}
+load(
+  file = file.path(
+    Sys.getenv('PICU_LAB_DATA_PATH'),
+    Sys.getenv('PICU_LAB_IN_FILE')
+  )
+)
+```
