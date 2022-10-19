@@ -25,8 +25,7 @@ suppressPackageStartupMessages({
   
   # Graphics and output
   require(ggplot2)
-  require(cowplot)
-  
+
   # Tables
   require(knitr)
   require(kableExtra)
@@ -346,8 +345,15 @@ Run the time threshold graph for both PROC options (if they exist):
 ```{r}
 for (proc.option in c('BG', 'ISTAT')) {
   
-  if (proc.option %in% unique(labs.df$PROC_NAME)) 
-    timeThresholdGraph(df = labs.df, PN = c('CBC', proc.option), CN = 'Hgb')
+  if (proc.option %in% unique(labs.df$PROC_NAME)) {
+    timeThresholdGraph(
+      df = labs.df, 
+      PN = c('CBC', proc.option), 
+      CN = 'Hgb',
+      to.save = T,
+      run.date = run.date
+    )
+  }
 
 }
 ```

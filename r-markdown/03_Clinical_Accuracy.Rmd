@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Overview
 
-The purpose of this markdown is to report clinical accuracy by displaying the Error Grid analysis, Cohen's Kappa, and "test" results. 
+The purpose of this markdown is to report clinical accuracy by displaying the Error Grid analysis, computing logistic regression on "well-matched" pairs, calculating Cohen's Kappa, and our "transfusion test" results. 
 
 ## Initialize
 
@@ -25,7 +25,7 @@ suppressPackageStartupMessages({
   
   # Graphics and output
   require(ggplot2)
-  require(cowplot)
+  #require(cowplot)
   
   # Tables
   require(knitr)
@@ -79,7 +79,9 @@ primary.cutoff <- 15.
 sens.cutoffs <- c(1., 30., 90.)
 
 # Hgb cutoffs
+primary.hgb.cutoff <- 7.0
 
+sens.hgb.cutoffs <- c(5., 9.)
 ```
 
 ## Join
@@ -169,7 +171,8 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       NUM_VAL.y          = first( NUM_VAL.y          ),
       COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
       AGE_PROC           = first( AGE_PROC           ),
-      ENC_KEY            = first( ENC_KEY )  
+      ENC_KEY            = first( ENC_KEY            ),
+      PAT_KEY            = first( PAT_KEY            )
     ) %>%
     dplyr::ungroup()
 
@@ -193,7 +196,8 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       NUM_VAL.y          = first( NUM_VAL.y          ),
       COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
       AGE_PROC           = first( AGE_PROC           ),      
-      ENC_KEY            = first( ENC_KEY )
+      ENC_KEY            = first( ENC_KEY            ),
+      PAT_KEY            = first( PAT_KEY            )
     ) %>%
     dplyr::ungroup()
   
@@ -244,6 +248,8 @@ cbc.bg <- createPairedDataset(
 ```
 
 ## Analyze
+
+In this section we complete the clinical accuracy assessments.
 
 ### Error Grid
 
@@ -354,12 +360,13 @@ calculateErrorGrid <- function (df, to.plot = T, to.return = T) {
       theme(panel.background = element_rect(fill = "transparent", colour = NA),
             plot.background = element_rect(fill = "transparent", colour = NA))
   
-  } else if (to.plot) {
+  } 
+  
+  if (to.plot) {
     print(Error_Grid)
-    
-    return()
-    
-  } else if (to.return) {
+  } 
+  
+  if (to.return) {
     return(Error_Grid)
     
   } else {
@@ -543,11 +550,28 @@ Now we join the covariates to the paired dataframe and add the age, filter and i
 
 ```{r}
 #'
-#' @title Filter Impute Regress
+#' @title Join Impute Regress
 #' 
-#' @description ...
+#' @description Join covars and pairs, impute NA values, regress, and report results
+#' 
+#' @param paired.df A dataframe of paired PN[1] and PN[2] values, created from 
+#'     the function `createPairedDataset()`
+#' @param covars.df A dataframe of covariates, created from the 
+#'     function `gatherCovariates()`
+#' @param thresh.list A list of three-element vectors, where each three-element
+#'     vector is of the format c(min, max, thresh). Such that for the list of 
+#'     pairs, if the mean Hgb (between PN[1] and PN[2]) falls between `min` and 
+#'     `max` and the difference is less than the threshold `thresh`, then the 
+#'     pair is considered `WELL_MATCHED` for the purposes of our logistic 
+#'     regression.
+#' @param impute.fx The function for imputing NA values [Default: `median`]
+#' @param ci If TRUE, compute the confidence intervals on the regression results 
+#'     [Default: TRUE]
+#'     
+#' @returns A list of the regression results as well as CIs (if computed)
 #'
-filterImputeRegress <- function (paired.df, covars.df, impute.fx = median, ci = T) {
+joinImputeRegress <- function (paired.df, covars.df, thresh.list, 
+                                 impute.fx = median, ci = T) {
   
   # First we join the paired data frame (as the basis) with the covariates,
   # by the unique ORDER PROC key of PN[1] (should be CBC)
@@ -576,17 +600,30 @@ filterImputeRegress <- function (paired.df, covars.df, impute.fx = median, ci = 
     dplyr::mutate(
       MEAN_HGB = (NUM_VAL.x + NUM_VAL.y) / 2.,
       DIFF_HGB = abs(NUM_VAL.x - NUM_VAL.y),
-      WELL_MATCHED = case_when(
-        MEAN_HGB > 6 & MEAN_HGB < 9 ~ if_else(DIFF_HGB < 1, TRUE, FALSE), 
-        TRUE ~ if_else(DIFF_HGB < 1.5, TRUE, FALSE)
-      )
-    ) %>%
+      WELL_MATCHED = F # Default to FALSE
+    )
+  
+  # Loop through the threshold list and OR together the WELL_MATCHED values
+  for (t in thresh.list) {
+    if (length(t) != 3)
+      stop('Each vector within the threshold list must be three elements')
+    
+    thresh.df$WELL_MATCHED <-
+      thresh.df$WELL_MATCHED | 
+      (thresh.df$MEAN_HGB > t[1] & thresh.df$MEAN_HGB < t[2] & thresh.df$DIFF_HGB < t[3])
+  }
+  
+  # Remove the MEAN and DIFF variables, as well as PN[1] value
+  thresh.df <-
+    thresh.df %>%
     dplyr::select(-MEAN_HGB, -DIFF_HGB, -NUM_VAL.x)
   
+
   cat(sprintf('Number (%%) of `WELL MATCHED`: %d (%0.2f %%)\n',
               sum(thresh.df$WELL_MATCHED),
               sum(thresh.df$WELL_MATCHED) / nrow(thresh.df) * 100.))
   
+  # Run the logistic regression 
   reg.model <- glm(
     WELL_MATCHED ~ NUM_VAL.y +
       pH + 
@@ -627,11 +664,329 @@ filterImputeRegress <- function (paired.df, covars.df, impute.fx = median, ci = 
 Now run the joining, imputing, and regression:
 
 ```{r}
+# Threshold lists are a list of three-element vectors, which the three elements
+# corresponding to: min, max, threshold
+# This can be read as, between the min and max, the mean diff must be less than 
+# the threshold, otherwise it is not `WELL_MATCHED`
+thresh.list <-
+  list(
+    c(-100, 6, 1.5),
+    c(6, 9, 1.0),
+    c(9, 100, 1.5)
+  )
+
 regress.res <-
-  filterImputeRegress(
+  joinImputeRegress(
     paired.df = cbc.bg,
     covars.df = covars.df,
+    thresh.list = thresh.list,
     impute.fx = median,
     ci = F
   )
 ```
+
+### Cohen's Kappa
+
+Cohen's kappa coefficient provides an assessment of agreement between two "raters", or as an assessment of classification matching. In our case, we would like to understand the agreement between two PROC_NAME (e.g. CBC and BG) hemoglobins, when a simple threshold is applied. 
+
+We hypothesize that there will be agreement at the tails but that there will be some disagreement in the local vicinity of the threshold, which will likely drive down the Kappa coefficient.
+
+First, here is the function to compute the Cohen's Kappa:
+
+```{r}
+#'
+#' @title Calculate Cohen Kappa
+#'
+#' @description Calculates the Cohen Kappa statistic for two vectors of CN values
+#'
+#' @details
+#'     Recall that Cohen's Kappa is defined as:
+#'
+#'       K = (P_observed - P_expected) / (1 - P_expected)
+#'
+#'       Where:
+#'         P_expected = sum(P_pos + P_neg) with
+#'           P_pos = P_raterA+ x P_raterB+ and P_neg = P_raterA- x P_raterB-
+#'
+#'     In our case, Rater A will be positive when value.x (from PN[1]) are less
+#'     than the cutoff, suggesting the need for a transfusion. Similarly, 
+#'     Rater B will be positive when value.y (from PN[2]) are less than the
+#'     cutoff.  
+#'
+#' A "Positive" response (meaning we have to transfuse) is when Hgb < cutoff,
+#' and a "Negative" response (meaning we do not transfuse) is when Hgb >= cutoff.
+#'
+#' @param values.x A column vector of Hgb values from PN[1]
+#' @param values.y A column vector of Hgb values from PN[2] (with length 
+#'     same as rater.A.bg)
+#' @param cutoff A scalar representing the Hgb cutoff value
+#' @param to.print If TRUE, prints results in addition to returning [Default]
+#'
+#' @return The Cohen Kappa for these two vectors at the cutoff given
+#'
+calculateCohenKappa <- function (values.x, values.y, 
+                                 cutoff = 7.0, to.print = T) {
+
+  # Verify that the lengths of the two vectors of PN values are identical
+  if (length(values.x) != length(values.y))
+    stop('Error: vectors for X and Y must be of equal lengths')
+
+  if (to.print)
+    cat(sprintf('Pre-Range Check Length: %d\n', length(values.x)))
+  
+  if (to.print)
+    cat(sprintf('Cutoff value used: %d\n', cutoff))
+
+  # Consider a 2x2 matrix with two "Raters" (or two vectors):
+  # 
+  #                      values.x 
+  #                   Yes   |     No
+  #                -------------------
+  #            Yes |   A    |    B   |
+  #  values.y  ----|--------|--------|
+  #            No  |   C    |    D   |
+  #                -------------------
+  #
+  #  where: len = A + B + C + D
+  #
+  P.x.pos <- sum(values.x < cutoff) / length(values.x) # Equiv to 'A + C'  / len
+  P.x.neg <- sum(values.x >= cutoff) / length(values.x) # Equiv to 'B + D' / len
+
+  P.y.pos <- sum(values.y < cutoff) / length(values.y) # Equiv to 'A + B' / len
+  P.y.neg <- sum(values.y >= cutoff) / length(values.y) # Equiv to ''C + D' / len
+
+  if (to.print) {
+    cat(sprintf('X :: Pos: %0.2f\tNeg: %0.2f\n', P.x.pos, P.x.neg))
+    cat(sprintf('Y :: Pos: %0.2f\tNeg: %0.2f\n', P.y.pos, P.y.neg))
+  }
+
+  P.pos <- P.x.pos * P.y.pos
+  P.neg <- P.x.neg * P.y.neg
+
+  if (to.print)
+    cat(sprintf('\tP.pos: %0.4f\n\tP.neg: %0.4f\n', P.pos, P.neg))
+
+  P.exp <- P.pos + P.neg
+
+  # Observed are the sum of counts of when both are either > or <=, divided by total
+  # Note that we can divide by either length(rater.A.bg) or length(rater.B.cbc) 
+  # since they are equal
+  P.obs <- (
+    sum((values.x < cutoff) & (values.y < cutoff)) +
+      sum((values.x >= cutoff) & (values.y >= cutoff)) ) / length(values.x)
+
+  if (to.print)
+    cat(sprintf('\tP.obs: %0.2f\n\tP.exp: %0.2f\n', P.obs, P.exp))
+
+  kappa <- (P.obs - P.exp) / (1. - P.exp)
+
+  if (to.print)
+    cat(sprintf('Kappa: %0.2f\n', kappa))
+
+  return(kappa)
+}
+```
+
+Now we use this function to calculate the Cohen's kappa at a given primary threshold:
+
+```{r}
+calculateCohenKappa(
+  values.x = cbc.bg$NUM_VAL.x,
+  values.y = cbc.bg$NUM_VAL.y,
+  cutoff = primary.hgb.cutoff,
+  to.print = T
+)
+```
+
+And run again across the secondary thresholds:
+
+```{r}
+for (thresh in sens.hgb.cutoffs) {
+  
+  calculateCohenKappa(
+    values.x = cbc.bg$NUM_VAL.x,
+    values.y = cbc.bg$NUM_VAL.y,
+    cutoff = thresh,
+    to.print = T
+  )
+  
+}
+
+rm(thresh)
+```
+
+### Transfusion Tests
+
+In this section, we ask the question, "If the BG Hgb value is greater than X, what is the likelihood that the CBC Hgb is less than Y?" for an appropriate transfusion threshold Y.
+
+Similarly, we can ask the question, "If the BG Hgb value is less than X, what is the likelihood that the CBC Hgb is greater than Y?" for the same set of transfusion thresholds.
+
+First we create the function to calculate the 2x2 matrix for this test:
+
+```{r}
+.lt <- function (a,b) { return (a < b) }
+.lte <- function (a,b) { return (a <= b) }
+.gt <- function (a,b) { return (a > b) }
+.gte <- function (a,b) { return (a >= b) }
+
+#'
+#' @title Transfusion Confusion Matrix
+#' 
+#' @description Creates a 2x2 confusion matrix for a pair of cutoffs and direction
+#' 
+#' @param value.x
+#' @param value.y
+#' @param cutoffs A two-element vector which specifies the cutoffs for PN[1] 
+#'     (which is typically the gold standard CBC) and for PN[2] (typically the
+#'     "test" BG or iStat)
+#' 
+#'
+transfusionConfusionMatrix <- function (value.x, value.y,
+                                  cutoffs = c(7., 7.),
+                                  direction = .lt,
+                                  to.print = T) {
+
+  # Are the lengths equal
+  stopifnot(length(value.x) == length(value.y))
+
+  # Is `cutoffs` a two-element vector?
+  stopifnot(length(cutoffs) == 2)
+
+  # Helper function to determine if two functions are identical
+  sameDefinition <- function(x, y) { 
+
+    stopifnot( is.function(x) )
+    stopifnot( is.function(y) )
+
+    identical(all.equal(x, y), TRUE)
+  } 
+  
+  # Check the `direction` parameter
+  if (sameDefinition(direction, .lt))
+    opp.direction <- .gte
+  else if (sameDefinition(direction, .gt))
+    opp.direction <- .lte
+  else
+    stop('Direction function must either be `.lt` or `.gt` functions')
+  
+  if (to.print)
+    cat(sprintf('Total number of input rows: %d\n',length(value.x)))
+
+  # 2x2 Standard Table:
+  #
+  #               Gold Standard (PN[1])
+  #                      value.x
+  #                 Pos     |   Neg
+  #               ----------------------
+  #           Pos |   TP    |     FP   |
+  # Test (PN[2])  |---------|----------|
+  #  value.y  Neg |   FN    |     TN   |
+  #               ----------------------
+  #
+  # In the default case, we consider "POS" to reflect the true need for a 
+  # transfusion, meaning the value was < the cutoff
+  
+  if (to.print)
+    cat(sprintf('Gold Standard:\n\tPositive: %d (%0.2f %%)\n\tNegative: %d (%0.2f %%)\n',
+                sum( direction(value.x, cutoffs[1]) ),
+                sum( direction(value.x, cutoffs[1]) ) / length(value.x) * 100.,
+                sum( opp.direction(value.x, cutoffs[1]) ),
+                sum( opp.direction(value.x, cutoffs[1]) ) / length(value.x) * 100.))
+  
+  # Rater A - yes, Rater B - yes
+  TP <- sum( direction(value.x, cutoffs[1]) & direction(value.y, cutoffs[2]) )
+
+  # Rater A - yes, Rater B - no
+  FP <- sum( opp.direction(value.x, cutoffs[1]) & direction(value.y, cutoffs[2]) )
+
+  # Rater A - no, Rater B - yes
+  FN <- sum( direction(value.x, cutoffs[1]) & opp.direction(value.y, cutoffs[2]) )
+
+  # Rater A - no, Rater B - no
+  TN <- sum( opp.direction(value.x, cutoffs[1]) & opp.direction(value.y, cutoffs[2]) )
+
+  # Dummy check - do these all add up to total length
+  stopifnot(TP+FP+TN+FN == length(value.x))
+  
+  sens <- TP / (TP + FN)
+  spec <- TN / (TN + FP)
+  ppv <- TP / (TP + FP)
+  npv <- TN / (FN + TN)
+
+  if (to.print)
+    cat(sprintf(paste0(
+      'TP: %d (%0.4f %%)\t',
+      'FP: %d (%0.4f %%)\n',
+      'FN: %d (%0.4f %%)\t',
+      'TN: %d (%0.4f %%)\n',
+      'Sens: %0.4f\n',
+      'Spec: %0.4f\n',
+      'PPV: %0.4f\n',
+      'NPV: %0.4f\n',
+      'FOR (1-NPV): %0.4f\n',
+      'NNM (1/FOR): %0.4f\n'),
+      TP, TP / length(value.x) * 100.,
+      FP, FP / length(value.x) * 100.,
+      FN, FN / length(value.x) * 100.,
+      TN, TN / length(value.x) * 100.,
+      sens, spec, ppv, npv, (1. - npv), 1. / (1. - npv)
+    ))
+}
+```
+
+```{r}
+transfusionConfusionMatrix(
+  value.x = cbc.bg$NUM_VAL.x,
+  value.y = cbc.bg$NUM_VAL.y,
+  cutoffs = c(7., 7.),
+  direction = .lt,
+  to.print = T
+)
+```
+
+### Save Analyses
+
+Now we save out all of the plots and calculations that we have completed:
+
+```{r}
+save(
+  file = file.path(
+    Sys.getenv('PICU_LAB_DATA_PATH'),
+    paste0(
+      Sys.getenv('PICU_LAB_SITE_NAME'),
+      '_pri_cbc_bg_clinical_',
+      run.date, '.rData'
+    )
+  ),
+  primary.cutoff,
+  cbc.bg, covars.df, 
+  error.grid.cbc.bg,
+  thresh.list, regress.res,
+  primary.hgb.cutoff
+)
+```
+
+```{r, echo=FALSE}
+rm(covars.df, cbc.bg, error.grid.cbc.bg, thresh.list, regress.res)
+```
+## CBC vs iSTAT
+
+Here we re-do the clinical accuracy analyses across CBC vs POC (iStat) procedures. To do this, we first (again) define a function that runs all of the above work - similar to in `02_Analytic_Accuracy.Rmd`, except this function is termed `runAllClinical()`. 
+
+```{r}
+#'
+#' @title Run All Clinical
+#' 
+#' @description ...
+#'
+runAllClinical <- function () {
+  
+  
+  
+}
+```
+
+## Sensitivity Analyses
+
+
+

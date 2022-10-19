@@ -126,7 +126,7 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       x = keyed.df %>%
         dplyr::filter(PROC_NAME == PN[1]) %>%
         dplyr::select(ENC_KEY, PAT_KEY, ORDER_PROC_KEY, 
-                      DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL),
+                      DEPT, COLLECTED_DT, RESULT_DT, NUM_VAL, AGE_PROC),
       y = keyed.df %>%
         dplyr::filter(PROC_NAME == PN[2]) %>%
         dplyr::select(ENC_KEY, PAT_KEY, ORDER_PROC_KEY,
@@ -137,9 +137,9 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
   
   # Join using base R, by column number
   #   [[5]] is PN[1] COLLECTED_DT
-  #   [[9]] is PN[2] COLLECTED_DT
+  #   [[10]] is PN[2] COLLECTED_DT
   joined.df$COLL_TIME_DIFF_MIN <-
-    as.numeric(joined.df[[5]] - joined.df[[9]], units = 'mins')
+    as.numeric(joined.df[[5]] - joined.df[[10]], units = 'mins')
  
   # Apply the cutoff time
   cutoff.df <- 
@@ -165,7 +165,9 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       RESULT_DT.y        = first( RESULT_DT.y        ),
       NUM_VAL.y          = first( NUM_VAL.y          ),
       COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
-      ENC_KEY            = first( ENC_KEY )  
+      AGE_PROC           = first( AGE_PROC           ),
+      ENC_KEY            = first( ENC_KEY            ),
+      PAT_KEY            = first( PAT_KEY            )
     ) %>%
     dplyr::ungroup()
 
@@ -188,7 +190,9 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
       RESULT_DT.y        = first( RESULT_DT.y        ),
       NUM_VAL.y          = first( NUM_VAL.y          ),
       COLL_TIME_DIFF_MIN = first( COLL_TIME_DIFF_MIN ),
-      ENC_KEY            = first( ENC_KEY )
+      AGE_PROC           = first( AGE_PROC           ),      
+      ENC_KEY            = first( ENC_KEY            ),
+      PAT_KEY            = first( PAT_KEY            )
     ) %>%
     dplyr::ungroup()
   

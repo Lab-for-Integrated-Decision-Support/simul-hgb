@@ -109,5 +109,5 @@ The functions in this markdown are:
 + `calculateErrorGrid` : Calculates points within each area of Error Grid and plots
 + `gatherCovariates` : Creates pivoted data frame of covariate labs for each pair
 + `displayCovariateStats` : Displays statistics on covariates in the data frame
-+ `filterImputeRegress` : ...
++ `joinImputeRegress` : Join covars and pairs, impute NA values, regress, and report results
 
