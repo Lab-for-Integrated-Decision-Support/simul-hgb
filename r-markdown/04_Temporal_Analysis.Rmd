@@ -325,9 +325,9 @@ describeRepeatedPairs <- function (paired.df, to.print = T, to.return = T) {
   
   if (to.return)
     return(list(
-      time.diff = time.diff.per.enc,
+      #time.diff = time.diff.per.enc,
       p.time.diff = p.time.diff,
-      counts.per.enc = counts.per.enc,
+      #counts.per.enc = counts.per.enc,
       p.counts = p.counts
     ))
 }
@@ -667,7 +667,7 @@ save(
     )
   ),
   primary.cutoff, time.diff.max,
-  cbc.bg, 
+  #cbc.bg, 
   res.cbc.bg.pairs,
   cbc.bg.all.pairs, cbc.bg.restrict.pairs
 )
@@ -779,7 +779,7 @@ Now we run for the POC values using the primary cutoff, allowing all results per
 ```{r}
 if ('ISTAT' %in% unique(labs.df$PROC_NAME)) {
   
-  runAllClinical(
+  runAllTemporal(
     labs.df,
     cohort.df, 
     compare.PN = 'ISTAT',

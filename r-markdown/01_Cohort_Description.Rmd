@@ -328,15 +328,13 @@ timeThresholdGraph <- function (df, PN, CN,
           run.date,'.rData'
         )
       ),
-      output.list
+      p
     )
   }
   
   # Return
   if (to.return) 
     return(output.list)
-  else
-    return()
 }
 ```
 
