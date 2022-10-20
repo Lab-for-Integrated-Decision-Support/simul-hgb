@@ -61,7 +61,7 @@ Important notes about the cohort and labs:
 
 ## Analysis
 
-Analysis proceeds first independently on each site, then we aggregate the data files from each site to generate the final figures. Note that each Markdown file has functions written in chunks.
+Analysis proceeds first independently on each site, then we aggregate the data files from each site to generate the final figures. Note that each Markdown file has functions written in chunks. These functions were pulled out to the package following development and testing.
 
 ### Site-wise Analysis
 
@@ -119,3 +119,19 @@ The functions in this markdown are:
 + `transfusionConfusionMatrix` : Creates a 2x2 confusion matrix for a pair of cutoffs and direction
 + `calculateThresholdROC` : Calculates an ROC and P-R based on Transfusion "Test"
 + `runAllClinical` : Runs through all clinical accuracy tasks, for sensitivity analysis
+
+#### Temporal Analysis
+
+Lastly, we move onto tempral assessments in the `04_Temporal_Analysis.Rmd` file. This is specifically in response to reviewer requests to consider the temporal components of simultaneously-acquired lab values. We again create the paired dataset using a copy of the same function as prior. We then describe repeated measures on the same encounter, and analyze the change in BG vs CBC hemoglobin on an Error Grid in response to reviewer requests.
+
+Depending on the PROCs in the dataset, the output data files from this markdown include:
+
++ `<SITE>_pri_cbc_bg_temporal_<date>.rData` - CBC-BG analysis using primary cutoff
++ `<SITE>_pri_cbc_istat_temporal_<date>.rData` - CBC-ISTAT analysis using primary cutoff
+
+The functions in this markdown are:
+
++ `createPairedDataset`: Creates a dataset of paired simultaneous lab values (**duplicated**)
++ `describeRepeatedPairs` : Describes counts of repeated pairs and time differences between pairs
++ `calculateChangeComparison` : Generates Delta Error Grid and Percents by Zone
++ `runAllTemporal` : Runs through all temporal assessments, for sensitivity analysis
