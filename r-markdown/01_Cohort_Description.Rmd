@@ -40,6 +40,8 @@ if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
     Sys.getenv('PICU_LAB_IN_FILE') == '' |
     Sys.getenv('PICU_LAB_SITE_NAME') == '')
   stop('Missing necessary environmental variables - see README.md')
+
+cat(sprintf('Site: %s\n', Sys.getenv('PICU_LAB_SITE_NAME')))
 ```
 
 Set the run date (for file export):

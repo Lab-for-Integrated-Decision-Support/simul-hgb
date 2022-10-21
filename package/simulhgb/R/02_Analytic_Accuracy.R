@@ -333,6 +333,7 @@ comparePearsonCorrelations <- function (r1, n1, r2, n2) {
 }
 
 
+
 #'
 #' @title Perform Bland Altman Analysis
 #'
@@ -347,18 +348,61 @@ comparePearsonCorrelations <- function (r1, n1, r2, n2) {
 #'
 #' @returns Either a list as denoted above, or NULL if `to.return` is FALSE
 #'
-#' @export
-#'
 performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
-                                        to.graph = T, to.return = T) {
+                                        to.graph = T, to.return = T,
+                                        non.param = NA) {
 
   # Filter by the department of interest first
   limited.df <-
     df %>%
-    dplyr::filter(DEPT %in% DPT)
+    dplyr::filter(DEPT %in% DPT) %>%
+    dplyr::mutate(
+      diff = NUM_VAL.x - NUM_VAL.y
+    ) %>%
+    dplyr::arrange(diff)
 
   cat(sprintf('Number of rows from which correlation is calculated: %d\n',
               nrow(limited.df)))
+
+  # If percentile ranges are given for non-parametric BA, trim data:
+  if (any(!is.na(non.param))) {
+
+    if (length(non.param) != 2)
+      stop('If non.param is specified, must be length == 2')
+
+    # Calculate lower and upper quantiles at the specified probabilities
+    lower <- quantile(limited.df$diff, probs = non.param[1])
+    upper <- quantile(limited.df$diff, probs = non.param[2])
+
+    # Keep only those rows where the diff falls within lower and upper
+    limited.df <-
+      limited.df %>%
+      dplyr::filter(
+        diff >= lower & diff <= upper
+      )
+
+    cat(sprintf('Lower %0.2f %%: %0.3f\tUpper %0.2f %%: %0.3f\n',
+                non.param[1] * 100., lower,
+                non.param[2] * 100., upper))
+
+    cat(sprintf('New number of rows: %d\n', nrow(limited.df)))
+  }
+
+  # QQ Plot of mean differences
+  p.qq <-
+    limited.df %>%
+    ggplot(aes(sample = diff)) +
+    stat_qq() +
+    ggtitle('QQ Plot of Differences') +
+    theme_bw()
+
+  if (to.graph)
+    print(p.qq)
+
+  # Do not use a test for normality unless number of samples < 5000
+  if (nrow(limited.df) < 5000) {
+    print( shapiro.test(limited.df$diff) )
+  }
 
   # For ease of subsequent coding, rename vectors:
   x <- limited.df$NUM_VAL.x
@@ -415,6 +459,7 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
     return()
   }
 }
+
 
 #'
 #' @title Describe Time To Result

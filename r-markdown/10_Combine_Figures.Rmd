@@ -380,6 +380,11 @@ rm(CHOP.TTR.BG, URMC.TTR.BG)
 rm(Supp_Figure_2)
 ```
 
+
+### B-A Non-Parametric
+
+*TODO** Use `ba.all.non.param` from the `analytic` data file.
+
 ### NNM Figure
 
 The NNM figure is created from a manually-entered data frame of values, because we do not save the NNM (see ~ line 935 in `03_Clinical_Accuracy.Rmd`).

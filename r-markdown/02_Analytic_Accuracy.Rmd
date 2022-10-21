@@ -39,6 +39,8 @@ if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
     Sys.getenv('PICU_LAB_IN_FILE') == '' |
     Sys.getenv('PICU_LAB_SITE_NAME') == '')
   stop('Missing necessary environmental variables - see README.md')
+
+cat(sprintf('Site: %s\n', Sys.getenv('PICU_LAB_SITE_NAME')))
 ```
 
 Specify the run date:
@@ -504,16 +506,61 @@ In this section we make use of the package `BlandAltmanLeh` to perform the calcu
 #' @returns Either a list as denoted above, or NULL if `to.return` is FALSE
 #'
 performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
-                                        to.graph = T, to.return = T) {
+                                        to.graph = T, to.return = T,
+                                        non.param = NA) {
   
   # Filter by the department of interest first
   limited.df <-
     df %>%
-    dplyr::filter(DEPT %in% DPT)
+    dplyr::filter(DEPT %in% DPT) %>%
+    dplyr::mutate(
+      diff = NUM_VAL.x - NUM_VAL.y
+    ) %>%
+    dplyr::arrange(diff)
   
   cat(sprintf('Number of rows from which correlation is calculated: %d\n',
               nrow(limited.df)))
   
+  # If percentile ranges are given for non-parametric BA, trim data:
+  if (any(!is.na(non.param))) {
+    
+    if (length(non.param) != 2)
+      stop('If non.param is specified, must be length == 2')
+    
+    # Calculate lower and upper quantiles at the specified probabilities
+    lower <- quantile(limited.df$diff, probs = non.param[1])
+    upper <- quantile(limited.df$diff, probs = non.param[2])
+    
+    # Keep only those rows where the diff falls within lower and upper
+    limited.df <-
+      limited.df %>%
+      dplyr::filter(
+        diff >= lower & diff <= upper
+      )
+    
+    cat(sprintf('Lower %0.2f %%: %0.3f\tUpper %0.2f %%: %0.3f\n',
+                non.param[1] * 100., lower, 
+                non.param[2] * 100., upper))
+    
+    cat(sprintf('New number of rows: %d\n', nrow(limited.df)))
+  }
+  
+  # QQ Plot of mean differences
+  p.qq <-
+    limited.df %>%
+    ggplot(aes(sample = diff)) +
+    stat_qq() +
+    ggtitle('QQ Plot of Differences') +
+    theme_bw()
+  
+  if (to.graph)
+    print(p.qq)  
+
+  # Do not use a test for normality unless number of samples < 5000
+  if (nrow(limited.df) < 5000) {
+    print( shapiro.test(limited.df$diff) )
+  }
+
   # For ease of subsequent coding, rename vectors:
   x <- limited.df$NUM_VAL.x
   y <- limited.df$NUM_VAL.y
@@ -541,7 +588,7 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
   # Make Graph
   mean.diff <- mean( x - y )
   sd.diff <- sd( x - y )
-
+  
   p <-
     ggplot() +
     geom_point(aes(x = (x + y) / 2., y = (x - y)), size = pt.size) +
@@ -579,7 +626,8 @@ ba.all <- performBlandAltmanANalysis(
   PN = c('CBC', 'BG'),
   DPT = c('PICU', 'CICU'),
   to.graph = T, 
-  to.return = T
+  to.return = T,
+  non.param = NA 
 )
 
 ba.picu <- performBlandAltmanANalysis(
@@ -596,6 +644,19 @@ ba.cicu <- performBlandAltmanANalysis(
   DPT = 'CICU',
   to.graph = T, 
   to.return = T
+)
+```
+
+Based on non-normally distributed differences, run non-parametric B-A by limiting percentiles for analysis:
+
+```{r}
+ba.all.non.param <- performBlandAltmanANalysis(
+  df = cbc.bg, 
+  PN = c('CBC', 'BG'),
+  DPT = c('PICU', 'CICU'),
+  to.graph = T, 
+  to.return = T,
+  non.param = c(0.025, 0.975)
 )
 ```
 
@@ -731,7 +792,7 @@ save(
   primary.cutoff,
   paired.res,
   pcc.cbc.bg, pcc.cbc.bg.picu, pcc.cbc.bg.cicu,
-  ba.all, ba.picu, ba.cicu,
+  ba.all, ba.picu, ba.cicu, ba.all.non.param,
   TTR.p
 )
 ```
@@ -834,6 +895,16 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
     to.graph = T, 
     to.return = T
   )
+  
+  # Bland Altman Analysis
+  ba.all.non.param <- performBlandAltmanANalysis(
+    df = paired.df, 
+    PN = c('CBC', compare.PN),
+    DPT = c('PICU', 'CICU'),
+    to.graph = T, 
+    to.return = T,
+    non.param = c(0.025, 0.0975)
+  )
 
   # Time-to-result  
   TTR.p <- describeTimeToResult(
@@ -856,7 +927,7 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
       time.diff, multi.per.pt,
       paired.res,
       pcc, pcc.picu, pcc.cicu,
-      ba.all, ba.picu, ba.cicu,
+      ba.all, ba.picu, ba.cicu, ba.all.non.param,
       TTR.p
     )
   }
