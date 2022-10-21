@@ -1,0 +1,513 @@
+---
+title: "10_Combine_Figures"
+author: "Adam Dziorny"
+date: '2022-10-20'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+The purpose of this markdown is to generate combined (CHOP + URMC) figures for publication. 
+
+## Initialize
+
+First we load the necessary packages:
+
+```{r, warning=FALSE}
+suppressPackageStartupMessages({
+  
+  # Data frame manipulation
+  require(dplyr)
+  
+  # Graphics and output
+  require(ggplot2)
+  require(cowplot)
+
+  # Tables
+  require(knitr)
+  require(kableExtra)
+  
+  # Error grid point allocation
+  require(ptinpoly)
+
+})
+```
+
+Ensure the environmental variables are specified:
+
+```{r}
+if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
+    Sys.getenv('PICU_LAB_IMG_PATH') == '' |
+    Sys.getenv('PICU_LAB_IN_FILE') == '' |
+    Sys.getenv('PICU_LAB_SITE_NAME') == '')
+  stop('Missing necessary environmental variables - see README.md')
+```
+
+Specify the run date of the source data files - this will be the same run date for the output images:
+
+```{r}
+run.date <- '2022-10-05'
+```
+
+
+#### Image Parameters
+
+```{r}
+ext <- '.tiff'
+
+dpi <- 600
+```
+
+### Variable Extraction Functions
+
+Here we define several helper functions for extracting variabes out of RData files. These are useful to pull specific variables from rData files into the `.GlobalEnv` without loading the entire rData file. 
+
+```{r}
+#'
+#' @title Make File Name
+#' 
+#' @description Helper function to make the file name from site, file, run.date
+#' 
+.makeFileName <- function (site, file, run.date) {
+  
+  return(
+    file.path(
+      Sys.getenv('PICU_LAB_DATA_PATH'),
+      paste0(site, '_', file, '_', run.date, '.rData')
+    )
+  )
+}
+
+#'
+#' @title List Vars
+#' 
+#' @description Lists the variables within an rData file
+#' 
+#' @param site The name of the site for extraction (e.g. `URMC` or `CHOP`)
+#' @param file The rData file name (without the `<site>` or `<date>` parts)
+#' @param run.date The run.date string
+#' @param attach If TRUE, attaches to the file [Default]
+#' @param detach If TRUE, detaches the file after extraction [Default]
+#'
+listVars <- function (site, file, run.date, attach = T, detach = T) {
+
+  file.name <- .makeFileName(site,file,run.date)
+  
+  if (attach)
+    attach(file.name)
+  
+  pos <- which(search() == paste0('file:', file.name))
+  
+
+  print(ls(pos = pos))
+  
+  if (detach)
+    detach(pos = pos)
+}
+
+#'
+#' @title Extract Var
+#' 
+#' @description Extracts a variable from an rData file to the Global Env 
+#' 
+#' @param old.var The variable name in the rData file (not character string)
+#' @param new.var.name The character string of the new variable name to be 
+#'     stored in the Global Env
+#' @param site The name of the site for extraction (e.g. `URMC` or `CHOP`)
+#' @param file The rData file name (without the `<site>` or `<date>` parts)
+#' @param run.date The run.date string
+#' @param attach If TRUE, attaches to the file [Default]
+#' @param detach If TRUE, detaches the file after extraction [Default]
+#'
+extractVar <- function (old.var, new.var.name, site, file, run.date,
+                        attach = T, detach = T) {
+  
+  file.name <- .makeFileName(site,file,run.date)
+  
+  if (attach)
+    attach(file.name)
+  
+  pos <- which(search() == paste0('file:', file.name))
+  
+  assign(
+    x = new.var.name,
+    value = old.var,
+    envir = .GlobalEnv
+  )
+  
+  if (detach)
+    detach(pos = pos)
+}
+```
+
+To demonstrate how these work, we display the variables within the `thresholds_CBC-BG` file from `CHOP`, extract the `p` plot variable into the variable name `My_Var_Name`, display the plot, and remove it. 
+
+```{r}
+listVars('CHOP', 'thresholds_CBC-BG', run.date, detach = F)
+
+extractVar(p, 'My_Var_Name', 'CHOP', 'thresholds_CBC-BG', run.date, attach = F)
+
+print(My_Var_Name)
+
+rm(My_Var_Name)
+```
+
+## Figure 1
+
+Figure 1 is a six-panel figure, consisting of the three Bland-Altman figures across the top (CHOP BG, URMC BG, CHOP POC) followed by the three Error Grids across the bottom (same order - CHOP BG, URMC BG, CHOP POC). The B-A figures are stored in `pri_cbc_bg_analytic` and the error grids are stored in `pri_cbc_bg_clinical`.
+
+First we view the variables to determine the BA plots (set to EVAL=FALSE since we don't need to do this each time):
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
+```
+
+The variable of interest is `ba.all`. Here we load them from the respective files:
+
+```{r}
+extractVar(ba.all, 'p.CHOP.BA.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(ba.all, 'p.URMC.BA.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(ba.all, 'p.CHOP.BA.POC', 'CHOP', 'pri_cbc_istat_analytic', run.date)
+```
+
+Now we view the variables to determine the Error_Grid plots (again set to EVAL=FALSE since we don't need to do this each time):
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_clinical', run.date)
+
+listVars('CHOP', 'pri_cbc_istat_clinical', run.date)
+```
+
+The variable of interest is `error.grid.cbc.bg`. Here we load them from the respective files:
+
+```{r}
+extractVar(error.grid.cbc.bg, 'p.CHOP.EG.BG', 'CHOP', 'pri_cbc_bg_clinical', run.date)
+
+extractVar(error.grid.cbc.bg, 'p.URMC.EG.BG', 'URMC', 'pri_cbc_bg_clinical', run.date)
+
+extractVar(error.grid, 'p.CHOP.EG.POC', 'CHOP', 'pri_cbc_istat_clinical', run.date)
+```
+
+Generate the figure:
+
+```{r}
+Figure_1 <- 
+  cowplot::plot_grid(
+    p.CHOP.BA.BG$plot +
+      ggtitle('CBC-BG (CHOP)') +
+      xlab('Average Hgb') +
+      ylab('Bias [CBC - BG Hgb]') +
+      theme(
+        title = element_text(size = 11),
+        axis.title = element_text(size = 9)
+      ),
+    p.URMC.BA.BG$plot +
+      ggtitle('CBC-BG (GCH)') +
+      xlab('Average Hgb') +
+      ylab('Bias [CBC - BG Hgb]') +
+      theme(
+        title = element_text(size = 11),
+        axis.title = element_text(size = 9)
+      ),
+    p.CHOP.BA.POC$plot +
+      ggtitle('CBC-POC') +
+      xlab('Average Hgb') +
+      ylab('Bias [CBC - POC Hgb]') +
+      theme(
+        title = element_text(size = 11),
+        axis.title = element_text(size = 9)
+      ),
+    p.CHOP.EG.BG + 
+      ggtitle('CBC-BG (CHOP)') +
+      xlab('CBC Hgb (g/dL)') +
+      ylab('BG Hgb (g/dL)') +
+      theme(
+        title = element_text(size = 11),
+        axis.title = element_text(size = 9)
+      ),
+    p.URMC.EG.BG + 
+      ggtitle('CBC-BG (GCH)') +
+      xlab('CBC Hgb (g/dL)') +
+      ylab('BG Hgb (g/dL)') +
+      theme(
+        title = element_text(size = 11),
+        axis.title = element_text(size = 9)
+      ),
+    p.CHOP.EG.POC + 
+      ggtitle('CBC-POC') +
+      xlab('CBC Hgb (g/dL)') +
+      ylab('POC Hgb (g/dL)') +
+      theme(
+        title = element_text(size = 11),
+        axis.title = element_text(size = 9)
+      ),
+    labels = tolower(LETTERS[1:6]), 
+    ncol = 3, nrow = 2)
+
+print(Figure_1)
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0('Figure-1_', run.date, ext)
+  ),
+  plot = Figure_1,
+  width = 8, height = 6, units = 'in', dpi = dpi)
+```
+
+```{r, echo=FALSE}
+rm(p.CHOP.BA.BG, p.URMC.BA.BG, p.CHOP.BA.POC)
+rm(p.CHOP.EG.BG, p.URMC.EG.BG, p.CHOP.EG.POC)
+rm(Figure_1)
+```
+
+### Supp Figure 1 
+
+Supplemental figure 1 is a three-panel (vertical) figure of Hgb distributions. These data are stored in the `analytic` files:
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
+```
+
+The variable of interest is `paired.res`:
+
+```{r}
+extractVar(paired.res, 'CHOP.dist.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(paired.res, 'URMC.dist.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(paired.res, 'CHOP.dist.POC', 'CHOP', 'pri_cbc_istat_analytic', run.date)
+```
+
+Now create the figure:
+
+```{r}
+Supp_Figure_1 <- 
+  cowplot::plot_grid(
+    CHOP.dist.BG$density.p +
+      coord_cartesian(xlim = c(4,22)) +
+      ggtitle('CBC-BG (CHOP)') +
+      theme(
+        legend.position = c(0.85, 0.7)
+      ),
+    URMC.dist.BG$density.p + 
+      coord_cartesian(xlim = c(4,22)) +
+      ggtitle('CBC-BG (GCH)') +
+      theme(
+        legend.position = 'none'
+      ),
+    CHOP.dist.POC$density.p + 
+      coord_cartesian(xlim = c(4,22)) +    
+      ggtitle('CBC-POC') +
+      theme(
+        legend.position = 'none'
+      ), 
+    labels = tolower(LETTERS[1:3]), 
+    ncol = 1, nrow = 3)
+
+Supp_Figure_1
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0('Supp-Figure-1_', run.date, ext)
+  ),
+  plot = Supp_Figure_1,
+  width = 6, height = 7, units = 'in', dpi = dpi)
+```
+
+```{r, echo=FALSE}
+rm(CHOP.dist.BG, CHOP.dist.POC, URMC.dist.BG)
+rm(Supp_Figure_1)
+```
+
+### Supp Figure 2
+
+Supplemental Figure 2 is a two-panel "Time To Result" plot. These are also found in `analytic` files.
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
+```
+
+The variable of interest is `TTR.p`.
+
+```{r}
+extractVar(TTR.p, 'CHOP.TTR.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(TTR.p, 'URMC.TTR.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+```
+
+And create the figure:
+
+```{r}
+Supp_Figure_2 <- 
+  cowplot::plot_grid(
+    CHOP.TTR.BG$plot + 
+      ggtitle('CBC-BG (CHOP)') +
+      theme(
+        legend.position = c(0.8, 0.7)
+      ),
+    URMC.TTR.BG$plot + 
+      ggtitle('CBC-BG (GCH)') +
+      theme(
+        legend.position = 'none'
+      ),
+    labels = tolower(LETTERS[1:2]), 
+    ncol = 1, nrow = 2)
+
+Supp_Figure_2
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0('Supp-Figure-2_', run.date, ext)
+  ),  
+  plot = Supp_Figure_2,
+  width = 7, height = 7, units = 'in', dpi = dpi)
+```
+
+```{r, echo=FALSE}
+rm(CHOP.TTR.BG, URMC.TTR.BG)
+rm(Supp_Figure_2)
+```
+
+### NNM Figure
+
+The NNM figure is created from a manually-entered data frame of values, because we do not save the NNM (see ~ line 935 in `03_Clinical_Accuracy.Rmd`).
+
+```{r}
+nnm.vals <-
+  rbind(
+    data.frame(
+      fn = 882, tn = 76768, cutoff = 7,
+      site = 'CHOP', src = 'BG'),
+    data.frame(
+      fn = 445, tn = 76288, cutoff = 7.5,
+      site = 'CHOP', src = 'BG'),
+    data.frame(
+      fn = 285, tn = 74877, cutoff = 8.0,
+      site = 'CHOP', src = 'BG'),
+    data.frame(
+      fn = 210, tn = 72307, cutoff = 8.5,
+      site = 'CHOP', src = 'BG'),
+    data.frame(
+      fn = 161, tn = 68535, cutoff = 9,
+      site = 'CHOP', src = 'BG'),
+    data.frame(
+      fn = 51, tn = 4019, cutoff = 7,
+      site = 'CHOP', src = 'POC'),
+    data.frame(
+      fn = 40, tn = 3959, cutoff = 7.5,
+      site = 'CHOP', src = 'POC'),
+    data.frame(
+      fn = 19, tn = 3757, cutoff = 8,
+      site = 'CHOP', src = 'POC'),
+    data.frame(
+      fn = 16, tn = 3633, cutoff = 8.5,
+      site = 'CHOP', src = 'POC'),
+    data.frame(
+      fn = 9, tn = 3361, cutoff = 9,
+      site = 'CHOP', src = 'POC'),
+    data.frame(
+      fn = 224, tn = 18389, cutoff = 7,
+      site = 'GCH', src = 'BG'),
+    data.frame(
+      fn = 84, tn = 18206, cutoff = 7.5,
+      site = 'GCH', src = 'BG'),
+    data.frame(
+      fn = 42, tn = 17700, cutoff = 8,
+      site = 'GCH', src = 'BG'),
+    data.frame(
+      fn = 26, tn = 16794, cutoff = 8.5,
+      site = 'GCH', src = 'BG'),
+    data.frame(
+      fn = 15, tn = 15604, cutoff = 9,
+      site = 'GCH', src = 'BG'),
+    stringsAsFactors = F)
+```
+
+Combine the CHOP and URMC BG values into a combo column:
+
+```{r}
+nnm.vals.added <- nnm.vals
+
+for (cut in unique(nnm.vals$cutoff)) {
+  nnm.vals.added <-
+    rbind(
+      nnm.vals.added,
+      data.frame(
+        fn = nnm.vals$fn[nnm.vals$src == 'BG' & nnm.vals$site == 'CHOP' & 
+                           nnm.vals$cutoff == cut] +
+          nnm.vals$fn[nnm.vals$src == 'BG' & nnm.vals$site == 'GCH' & 
+                        nnm.vals$cutoff == cut],
+        tn = nnm.vals$tn[nnm.vals$src == 'BG' & nnm.vals$site == 'CHOP' & 
+                           nnm.vals$cutoff == cut] +
+          nnm.vals$tn[nnm.vals$src == 'BG' & nnm.vals$site == 'GCH' & 
+                           nnm.vals$cutoff == cut],
+        cutoff = cut,
+        src = 'BG',
+        site = 'Combined'
+      ),
+      stringsAsFactors = F
+    )
+}
+
+nnm.vals.added <-
+  nnm.vals.added %>%
+  dplyr::mutate(
+    false_or = fn / (tn + fn),
+    nnm = 1. / false_or,
+    site = factor(site),
+    src = factor(src)
+  )
+```
+
+Create the plot and save out:
+
+```{r}
+nnm.fig <-
+  nnm.vals.added %>%
+  dplyr::filter(src == 'BG') %>%
+  ggplot() +
+  geom_point(aes(x = cutoff, y = nnm, color = site), size = 3) +
+  geom_line(aes(x = cutoff, y = nnm, color = site), size = 1.5) +
+  xlab('BG Cutoff (g/dL)') +
+  ylab('Number Needed to Miss') +
+  labs(color = 'Site') +
+  scale_color_brewer(palette = 'Set2') +
+  theme_bw() +
+  theme(
+    legend.position = c(0.2, 0.7)
+  )
+
+nnm.fig
+
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0('NNM_Figure_', run.date, ext)
+  ), 
+  plot = nnm.fig,
+  width = 6, height = 4, units = 'in', dpi = dpi
+)
+```
+
+```{r, echo=FALSE}
+rm(nnm.vals, nnm.vals.added, cut)
+rm(nnm.fig)
+```
+
+
+
+
+
+

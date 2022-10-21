@@ -135,3 +135,14 @@ The functions in this markdown are:
 + `describeRepeatedPairs` : Describes counts of repeated pairs and time differences between pairs
 + `calculateChangeComparison` : Generates Delta Error Grid and Percents by Zone
 + `runAllTemporal` : Runs through all temporal assessments, for sensitivity analysis
+
+
+### Combined Processing
+
+After sharing (non-PHI) `rData` output files from both sites, we combine sites' data to create publication figures. This is done in the file `10_Combine_Figures.Rmd`. This file has several helper functions to list and load specific variables from `rData` files. Making use of those functions and the `cowplot` package, we generate all of the figures for the publication as well as supplemental figures.
+
+The functions in this markdown are:
+
++ `.makeFileName` : Helper function to make the file name from site, file, run.date
++ `listVars` : Lists the variables within an rData file
++ `extractVar` : Extracts a variable from an rData file to the Global Env
