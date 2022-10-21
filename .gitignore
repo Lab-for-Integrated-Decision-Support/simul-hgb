@@ -6,7 +6,7 @@
 .RData
 
 # Markdown HTML files
-*.html
+r-markdown/*.html
 
 # Man pages
 *.Rd
