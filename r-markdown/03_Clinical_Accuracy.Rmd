@@ -937,15 +937,26 @@ transfusionConfusionMatrix <- function (value.x, value.y,
 We can run this across a few standard values:
 
 ```{r}
-for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0))
+mat.across.cutoffs <- list()
+
+for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0)) {
   
-  transfusionConfusionMatrix(
+  res <- transfusionConfusionMatrix(
     value.x = cbc.bg$NUM_VAL.x,
     value.y = cbc.bg$NUM_VAL.y,
     cutoffs = c(primary.hgb.cutoff, pn2.cutoff),
     to.print = T,
-    to.return = F
+    to.return = T
   )
+  
+  mat.across.cutoffs <-
+    append(
+      mat.across.cutoffs,
+      list(list( # Use a double list here so that we enclose each cutoff results in a list
+        res = res, cutoff = pn2.cutoff
+      ))
+    )
+}
 
 rm(pn2.cutoff)
 ```
@@ -1173,7 +1184,7 @@ save(
   primary.cutoff,
   #cbc.bg, covars.df, 
   error.grid.cbc.bg,
-  thresh.list, regress.res,
+  thresh.list, regress.res, mat.across.cutoffs,
   primary.hgb.cutoff, cbc.bg.thresh.roc
 )
 ```
@@ -1277,15 +1288,26 @@ runAllClinical <- function (labs.df, cohort.df, compare.PN,
   rm(thresh)
 
   # Compute Transfusion Confusion Matrix at a range of PN[2] cutoff values
-  for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0))
+  mat.across.cutoffs <- list()
+  
+  for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0)) {
     
-    transfusionConfusionMatrix(
+    res <- transfusionConfusionMatrix(
       value.x = paired.df$NUM_VAL.x,
       value.y = paired.df$NUM_VAL.y,
       cutoffs = c(primary.hgb.cutoff, pn2.cutoff),
       to.print = T,
-      to.return = F
+      to.return = T
     )
+    
+    mat.across.cutoffs <-
+      append(
+        mat.across.cutoffs,
+        list(list( # Use a double list here so that we enclose each cutoff results in a list
+          res = res, cutoff = pn2.cutoff
+        ))
+      )
+  }  
   
   rm(pn2.cutoff)
 
@@ -1310,7 +1332,7 @@ runAllClinical <- function (labs.df, cohort.df, compare.PN,
       primary.cutoff,
       #paired.df, covars.df, 
       error.grid,
-      thresh.list, regress.res,
+      thresh.list, regress.res, mat.across.cutoffs,
       primary.hgb.cutoff, thresh.roc
     )
   }
