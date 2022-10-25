@@ -42,7 +42,8 @@ Ensure the environmental variables are specified:
 if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
     Sys.getenv('PICU_LAB_IMG_PATH') == '' |
     Sys.getenv('PICU_LAB_IN_FILE') == '' |
-    Sys.getenv('PICU_LAB_SITE_NAME') == '')
+    Sys.getenv('PICU_LAB_SITE_NAME') == '' |
+    Sys.getenv('PICU_LAB_RUN_DATE') == '')
   stop('Missing necessary environmental variables - see README.md')
 
 cat(sprintf('Site: %s\n', Sys.getenv('PICU_LAB_SITE_NAME')))
@@ -51,7 +52,9 @@ cat(sprintf('Site: %s\n', Sys.getenv('PICU_LAB_SITE_NAME')))
 Specify the run date:
 
 ```{r}
-run.date <- '2022-10-05'
+run.date <- Sys.getenv('PICU_LAB_RUN_DATE')
+
+cat(sprintf('Run Date: %s\n', run.date))
 ```
 
 ## Data Input
