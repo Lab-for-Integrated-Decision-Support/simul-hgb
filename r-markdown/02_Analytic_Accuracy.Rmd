@@ -613,7 +613,8 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
     return(
       list(
         stats = stats,
-        plot = p
+        plot = p, 
+        qq.plot = p.qq
       ))
   } else {
     return()

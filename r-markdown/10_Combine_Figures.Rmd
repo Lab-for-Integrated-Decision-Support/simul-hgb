@@ -43,16 +43,18 @@ Ensure the environmental variables are specified:
 if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
     Sys.getenv('PICU_LAB_IMG_PATH') == '' |
     Sys.getenv('PICU_LAB_IN_FILE') == '' |
-    Sys.getenv('PICU_LAB_SITE_NAME') == '')
+    Sys.getenv('PICU_LAB_SITE_NAME') == '' |
+    Sys.getenv('PICU_LAB_RUN_DATE') == '')
   stop('Missing necessary environmental variables - see README.md')
 ```
 
 Specify the run date of the source data files - this will be the same run date for the output images:
 
 ```{r}
-run.date <- '2022-10-05'
-```
+run.date <- Sys.getenv('PICU_LAB_RUN_DATE')
 
+cat(sprintf('Run Date: %s\n', run.date))
+```
 
 #### Image Parameters
 
@@ -156,7 +158,9 @@ print(My_Var_Name)
 rm(My_Var_Name)
 ```
 
-## Figure 1
+## Original Manuscript Figures
+
+### Figure 1
 
 Figure 1 is a six-panel figure, consisting of the three Bland-Altman figures across the top (CHOP BG, URMC BG, CHOP POC) followed by the three Error Grids across the bottom (same order - CHOP BG, URMC BG, CHOP POC). The B-A figures are stored in `pri_cbc_bg_analytic` and the error grids are stored in `pri_cbc_bg_clinical`.
 
@@ -387,7 +391,7 @@ rm(Supp_Figure_2)
 
 ### NNM Figure
 
-The NNM figure is created from a manually-entered data frame of values, because we do not save the NNM (see ~ line 935 in `03_Clinical_Accuracy.Rmd`).
+The NNM figure is created from a manually-entered data frame of values, because we do not save the NNM (see ~ line 939 in `03_Clinical_Accuracy.Rmd`).
 
 ```{r}
 nnm.vals <-
@@ -511,8 +515,146 @@ rm(nnm.vals, nnm.vals.added, cut)
 rm(nnm.fig)
 ```
 
+## Revision Figures
 
+Here we plot figures necessary for manuscript revision.
 
+### Time Threshold
+
+This is a three-panel figure (horizontal) which plots the `timeThresholdGraph` for CHOP BG, ISTAT, and URMC BG. The data are located in the `cohort_description` files.
+
+```{r, eval=FALSE}
+listVars('CHOP', 'thresholds_cbc-bg', run.date)
+```
+
+The variable of interest is `p`.
+
+```{r}
+extractVar(p, 'CHOP.TimeThresh.BG', 'CHOP', 'thresholds_CBC-BG', run.date)
+
+extractVar(p, 'CHOP.TimeThresh.POC', 'CHOP', 'thresholds_CBC-ISTAT', run.date)
+
+extractVar(p, 'URMC.TimeThresh.BG', 'URMC', 'thresholds_CBC-BG', run.date)
+```
+
+And create the figure:
+
+```{r}
+Supp_Figure_TimeThresh <- 
+  cowplot::plot_grid(
+    CHOP.TimeThresh.BG + 
+      ggtitle('CHOP BG') +
+      theme(
+        #axis.title.x = element_blank()
+      ),
+    CHOP.TimeThresh.POC + 
+      ggtitle('CHOP POC') +
+      theme(
+        #legend.position = 'none'
+      ),
+    URMC.TimeThresh.BG +
+      ggtitle('URMC BG') +
+      theme(
+        #axis.title.x = element_blank()
+      ),
+    labels = tolower(LETTERS[1:3]), 
+    ncol = 3, nrow = 1)
+
+Supp_Figure_TimeThresh
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0('Supp-Figure-TimeThreshold_', run.date, ext)
+  ),  
+  plot = Supp_Figure_TimeThresh,
+  width = 12, height = 4, units = 'in', dpi = dpi)
+```
+
+```{r, echo=FALSE}
+rm(CHOP.TimeThresh.BG, CHOP.TimeThresh.POC, URMC.TimeThresh.BG)
+rm(Supp_Figure_TimeThresh)
+```
+
+### Bland Altman Non-Parameteric
+
+We demonstrate the Q:Q plot for CBC-BG at both CHOP and URMC, along with the B-A plots for the non-parametric B-A (middle 95% of points). In that same section of the Supplemental Digital Content, we report the biases, LOA, and CIs for all of these measurements. 
+
+These figures are located in the `analytic` files.
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
+```
+
+The variable of interest is `ba.all.non.param`:
+
+```{r}
+extractVar(ba.all.non.param, 'CHOP.BA.NP.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(ba.all.non.param, 'URMC.BA.NP.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+```
+
+And create the 2x2 figure:
+
+```{r}
+Supp_Figure_NonParamBA <- 
+  cowplot::plot_grid(
+    CHOP.BA.NP.BG$qq.plot + 
+      ggtitle('CHOP BG Q:Q Plot') +
+      theme(
+        #axis.title.x = element_blank()
+      ),
+    URMC.BA.NP.BG$qq.plot + 
+      ggtitle('URMC BG Q:Q Plot') +
+      theme(
+        #legend.position = 'none'
+      ),
+    CHOP.BA.NP.BG$plot +
+      ggtitle('CHOP B-A Plot') +
+      theme(
+        #axis.title.x = element_blank()
+      ),
+    URMC.BA.NP.BG$plot +
+      ggtitle('URMC B-A Plot') +
+      theme(
+        #axis.title.x = element_blank()
+      ),    
+    labels = tolower(LETTERS[1:4]), 
+    ncol = 2, nrow = 2)
+
+Supp_Figure_NonParamBA
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0('Supp-Figure-NonParam-BA_', run.date, ext)
+  ),  
+  plot = Supp_Figure_NonParamBA,
+  width = 8, height = 8, units = 'in', dpi = dpi)
+```
+
+```{r, echo=FALSE}
+rm(CHOP.BA.NP.BG, URMC.BA.NP.BG)
+rm(Supp_Figure_NonParamBA)
+```
+
+### Sens Analysis 
+
+#### Single Value per Patient
+
+##### Distributions
+
+3 x 1 panel of CHOP BG, POC and URMC BG displaying distributions along with text describing data
+
+##### B-A Analysis
+
+3 x 1 panel of CHOP BG, POC, and URMC BG showing B-A plots along with text describing bias and LOAs
+
+##### Time TO Result
+
+2 x 1 panel of CHOP BG, URMC BG for Time TO Result along with text describing TTR
 
 
 

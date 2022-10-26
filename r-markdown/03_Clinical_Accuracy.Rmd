@@ -685,7 +685,7 @@ regress.res <-
     covars.df = covars.df,
     thresh.list = thresh.list,
     impute.fx = median,
-    ci = F
+    ci = T
   )
 ```
 
@@ -1262,7 +1262,7 @@ runAllClinical <- function (labs.df, cohort.df, compare.PN,
       covars.df = covars.df,
       thresh.list = thresh.list,
       impute.fx = median,
-      ci = F
+      ci = T
     )
 
 
