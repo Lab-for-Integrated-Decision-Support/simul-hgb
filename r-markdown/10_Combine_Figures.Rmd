@@ -44,16 +44,25 @@ if (Sys.getenv('PICU_LAB_DATA_PATH') == '' |
     Sys.getenv('PICU_LAB_IMG_PATH') == '' |
     Sys.getenv('PICU_LAB_IN_FILE') == '' |
     Sys.getenv('PICU_LAB_SITE_NAME') == '' |
-    Sys.getenv('PICU_LAB_RUN_DATE') == '')
+    Sys.getenv('PICU_LAB_RUN_DATE') == '' |
+    Sys.getenv('PICU_LAB_IMG_SAVE_DATE') == '')
   stop('Missing necessary environmental variables - see README.md')
 ```
 
-Specify the run date of the source data files - this will be the same run date for the output images:
+Specify the run date of the source data files:
 
 ```{r}
 run.date <- Sys.getenv('PICU_LAB_RUN_DATE')
 
 cat(sprintf('Run Date: %s\n', run.date))
+```
+
+Now specify the save date for the output images (which may be identical to the run date):
+
+```{r}
+img.save.date <- Sys.getenv('PICU_LAB_IMG_SAVE_DATE')
+
+cat(sprintf('Image Save Date: %s\n', img.save.date))
 ```
 
 #### Image Parameters
@@ -62,6 +71,8 @@ cat(sprintf('Run Date: %s\n', run.date))
 ext <- '.tiff'
 
 dpi <- 600
+
+compress <- 'lzw'
 ```
 
 ### Variable Extraction Functions
@@ -160,9 +171,70 @@ rm(My_Var_Name)
 
 ## Original Manuscript Figures
 
-### Figure 1
+### Figure 1 
 
-Figure 1 is a six-panel figure, consisting of the three Bland-Altman figures across the top (CHOP BG, URMC BG, CHOP POC) followed by the three Error Grids across the bottom (same order - CHOP BG, URMC BG, CHOP POC). The B-A figures are stored in `pri_cbc_bg_analytic` and the error grids are stored in `pri_cbc_bg_clinical`.
+Figure 1 is a three-panel (vertical) figure of Hgb distributions. These data are stored in the `analytic` files:
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
+```
+
+The variable of interest is `paired.res`:
+
+```{r}
+extractVar(paired.res, 'CHOP.dist.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(paired.res, 'URMC.dist.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(paired.res, 'CHOP.dist.POC', 'CHOP', 'pri_cbc_istat_analytic', run.date)
+```
+
+Now create the figure:
+
+```{r}
+Figure_1 <- 
+  cowplot::plot_grid(
+    CHOP.dist.BG$density.p +
+      coord_cartesian(xlim = c(4,22)) +
+      ggtitle('CBC-BG (CHOP)') +
+      theme(
+        legend.position = c(0.85, 0.7)
+      ),
+    URMC.dist.BG$density.p + 
+      coord_cartesian(xlim = c(4,22)) +
+      ggtitle('CBC-BG (GCH)') +
+      theme(
+        legend.position = 'none'
+      ),
+    CHOP.dist.POC$density.p + 
+      coord_cartesian(xlim = c(4,22)) +    
+      ggtitle('CBC-POC') +
+      theme(
+        legend.position = 'none'
+      ), 
+    labels = tolower(LETTERS[1:3]), 
+    ncol = 1, nrow = 3)
+
+print(Figure_1)
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0(img.save.date, '_Figure-1', ext)
+  ),
+  plot = Figure_1,
+  width = 6, height = 7, units = 'in', dpi = dpi, compression = compress)
+```
+
+```{r, echo=FALSE}
+rm(CHOP.dist.BG, CHOP.dist.POC, URMC.dist.BG)
+rm(Figure_1)
+```
+
+### Figure 2
+
+Figure 2 is a six-panel figure, consisting of the three Bland-Altman figures across the top (CHOP BG, URMC BG, CHOP POC) followed by the three Error Grids across the bottom (same order - CHOP BG, URMC BG, CHOP POC). The B-A figures are stored in `pri_cbc_bg_analytic` and the error grids are stored in `pri_cbc_bg_clinical`.
 
 First we view the variables to determine the BA plots (set to EVAL=FALSE since we don't need to do this each time):
 
@@ -201,7 +273,7 @@ extractVar(error.grid, 'p.CHOP.EG.POC', 'CHOP', 'pri_cbc_istat_clinical', run.da
 Generate the figure:
 
 ```{r}
-Figure_1 <- 
+Figure_2 <- 
   cowplot::plot_grid(
     p.CHOP.BA.BG$plot +
       ggtitle('CBC-BG (CHOP)') +
@@ -254,194 +326,68 @@ Figure_1 <-
     labels = tolower(LETTERS[1:6]), 
     ncol = 3, nrow = 2)
 
-print(Figure_1)
+print(Figure_2)
 
 # Export 
 ggplot2::ggsave(
   filename = file.path(
     Sys.getenv('PICU_LAB_IMG_PATH'),
-    paste0('Figure-1_', run.date, ext)
+    paste0(img.save.date, '_Figure-2', ext)
   ),
-  plot = Figure_1,
-  width = 8, height = 6, units = 'in', dpi = dpi)
+  plot = Figure_2,
+  width = 8, height = 6, units = 'in', dpi = dpi, compression = compress)
 ```
 
 ```{r, echo=FALSE}
 rm(p.CHOP.BA.BG, p.URMC.BA.BG, p.CHOP.BA.POC)
 rm(p.CHOP.EG.BG, p.URMC.EG.BG, p.CHOP.EG.POC)
-rm(Figure_1)
+rm(Figure_2)
 ```
 
-### Supp Figure 1 
+### Figure 3
 
-Supplemental figure 1 is a three-panel (vertical) figure of Hgb distributions. These data are stored in the `analytic` files:
-
-```{r, eval=FALSE}
-listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
-```
-
-The variable of interest is `paired.res`:
+Figure 3 plots the NNM from the saved-out confusion matrices (see ~ line 939 in `03_Clinical_Accuracy.Rmd`). We load in the matrices, which are lists of lists. 
 
 ```{r}
-extractVar(paired.res, 'CHOP.dist.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+extractVar(mat.across.cutoffs, 'URMC.CUTOFFS', 'URMC', 'pri_cbc_bg_clinical', run.date)
 
-extractVar(paired.res, 'URMC.dist.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
-
-extractVar(paired.res, 'CHOP.dist.POC', 'CHOP', 'pri_cbc_istat_analytic', run.date)
+extractVar(mat.across.cutoffs, 'CHOP.CUTOFFS', 'CHOP', 'pri_cbc_bg_clinical', run.date)
 ```
 
-Now create the figure:
+Now we create a smaller data frame, with just the FN and TN, to calculate the NPV or FOR.
 
 ```{r}
-Supp_Figure_1 <- 
-  cowplot::plot_grid(
-    CHOP.dist.BG$density.p +
-      coord_cartesian(xlim = c(4,22)) +
-      ggtitle('CBC-BG (CHOP)') +
-      theme(
-        legend.position = c(0.85, 0.7)
-      ),
-    URMC.dist.BG$density.p + 
-      coord_cartesian(xlim = c(4,22)) +
-      ggtitle('CBC-BG (GCH)') +
-      theme(
-        legend.position = 'none'
-      ),
-    CHOP.dist.POC$density.p + 
-      coord_cartesian(xlim = c(4,22)) +    
-      ggtitle('CBC-POC') +
-      theme(
-        legend.position = 'none'
-      ), 
-    labels = tolower(LETTERS[1:3]), 
-    ncol = 1, nrow = 3)
+nnm.vals <- data.frame()
 
-Supp_Figure_1
-
-# Export 
-ggplot2::ggsave(
-  filename = file.path(
-    Sys.getenv('PICU_LAB_IMG_PATH'),
-    paste0('Supp-Figure-1_', run.date, ext)
-  ),
-  plot = Supp_Figure_1,
-  width = 6, height = 7, units = 'in', dpi = dpi)
-```
-
-```{r, echo=FALSE}
-rm(CHOP.dist.BG, CHOP.dist.POC, URMC.dist.BG)
-rm(Supp_Figure_1)
-```
-
-### Supp Figure 2
-
-Supplemental Figure 2 is a two-panel "Time To Result" plot. These are also found in `analytic` files.
-
-```{r, eval=FALSE}
-listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
-```
-
-The variable of interest is `TTR.p`.
-
-```{r}
-extractVar(TTR.p, 'CHOP.TTR.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
-
-extractVar(TTR.p, 'URMC.TTR.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
-```
-
-And create the figure:
-
-```{r}
-Supp_Figure_2 <- 
-  cowplot::plot_grid(
-    CHOP.TTR.BG$plot + 
-      ggtitle('CBC-BG (CHOP)') +
-      theme(
-        legend.position = c(0.8, 0.7)
-      ),
-    URMC.TTR.BG$plot + 
-      ggtitle('CBC-BG (GCH)') +
-      theme(
-        legend.position = 'none'
-      ),
-    labels = tolower(LETTERS[1:2]), 
-    ncol = 1, nrow = 2)
-
-Supp_Figure_2
-
-# Export 
-ggplot2::ggsave(
-  filename = file.path(
-    Sys.getenv('PICU_LAB_IMG_PATH'),
-    paste0('Supp-Figure-2_', run.date, ext)
-  ),  
-  plot = Supp_Figure_2,
-  width = 7, height = 7, units = 'in', dpi = dpi)
-```
-
-```{r, echo=FALSE}
-rm(CHOP.TTR.BG, URMC.TTR.BG)
-rm(Supp_Figure_2)
-```
-
-
-### B-A Non-Parametric
-
-*TODO** Use `ba.all.non.param` from the `analytic` data file.
-
-### NNM Figure
-
-The NNM figure is created from a manually-entered data frame of values, because we do not save the NNM (see ~ line 939 in `03_Clinical_Accuracy.Rmd`).
-
-```{r}
-nnm.vals <-
-  rbind(
+for (mat in CHOP.CUTOFFS) {
+  
+  nnm.vals <- rbind(
+    nnm.vals,
     data.frame(
-      fn = 882, tn = 76768, cutoff = 7,
-      site = 'CHOP', src = 'BG'),
+      fn = mat$res$FN,
+      tn = mat$res$TN,
+      cutoff = mat$cutoff,
+      site = 'CHOP',
+      src = 'BG'
+    ), stringsAsFactors = F
+  )
+  
+}
+
+for (mat in URMC.CUTOFFS) {
+  
+  nnm.vals <- rbind(
+    nnm.vals,
     data.frame(
-      fn = 445, tn = 76288, cutoff = 7.5,
-      site = 'CHOP', src = 'BG'),
-    data.frame(
-      fn = 285, tn = 74877, cutoff = 8.0,
-      site = 'CHOP', src = 'BG'),
-    data.frame(
-      fn = 210, tn = 72307, cutoff = 8.5,
-      site = 'CHOP', src = 'BG'),
-    data.frame(
-      fn = 161, tn = 68535, cutoff = 9,
-      site = 'CHOP', src = 'BG'),
-    data.frame(
-      fn = 51, tn = 4019, cutoff = 7,
-      site = 'CHOP', src = 'POC'),
-    data.frame(
-      fn = 40, tn = 3959, cutoff = 7.5,
-      site = 'CHOP', src = 'POC'),
-    data.frame(
-      fn = 19, tn = 3757, cutoff = 8,
-      site = 'CHOP', src = 'POC'),
-    data.frame(
-      fn = 16, tn = 3633, cutoff = 8.5,
-      site = 'CHOP', src = 'POC'),
-    data.frame(
-      fn = 9, tn = 3361, cutoff = 9,
-      site = 'CHOP', src = 'POC'),
-    data.frame(
-      fn = 224, tn = 18389, cutoff = 7,
-      site = 'GCH', src = 'BG'),
-    data.frame(
-      fn = 84, tn = 18206, cutoff = 7.5,
-      site = 'GCH', src = 'BG'),
-    data.frame(
-      fn = 42, tn = 17700, cutoff = 8,
-      site = 'GCH', src = 'BG'),
-    data.frame(
-      fn = 26, tn = 16794, cutoff = 8.5,
-      site = 'GCH', src = 'BG'),
-    data.frame(
-      fn = 15, tn = 15604, cutoff = 9,
-      site = 'GCH', src = 'BG'),
-    stringsAsFactors = F)
+      fn = mat$res$FN,
+      tn = mat$res$TN,
+      cutoff = mat$cutoff,
+      site = 'GCH',
+      src = 'BG'
+    ), stringsAsFactors = F
+  )
+  
+}
 ```
 
 Combine the CHOP and URMC BG values into a combo column:
@@ -483,7 +429,7 @@ nnm.vals.added <-
 Create the plot and save out:
 
 ```{r}
-nnm.fig <-
+Figure_3 <-
   nnm.vals.added %>%
   dplyr::filter(src == 'BG') %>%
   ggplot() +
@@ -498,26 +444,80 @@ nnm.fig <-
     legend.position = c(0.2, 0.7)
   )
 
-nnm.fig
+print(Figure_3)
 
 ggplot2::ggsave(
   filename = file.path(
     Sys.getenv('PICU_LAB_IMG_PATH'),
-    paste0('NNM_Figure_', run.date, ext)
+    paste0(img.save.date, '_Figure-3', ext)
   ), 
-  plot = nnm.fig,
-  width = 6, height = 4, units = 'in', dpi = dpi
+  plot = Figure_3,
+  width = 6, height = 4, units = 'in', dpi = dpi, 
+  compression = compress
 )
 ```
 
 ```{r, echo=FALSE}
+rm(mat, CHOP.CUTOFFS, URMC.CUTOFFS)
 rm(nnm.vals, nnm.vals.added, cut)
-rm(nnm.fig)
+rm(Figure_3)
 ```
+
+### Figure 4
+
+Figure 4 is a two-panel "Time To Result" plot. These are also found in `analytic` files.
+
+```{r, eval=FALSE}
+listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
+```
+
+The variable of interest is `TTR.p`.
+
+```{r}
+extractVar(TTR.p, 'CHOP.TTR.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(TTR.p, 'URMC.TTR.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+```
+
+And create the figure:
+
+```{r}
+Figure_4 <- 
+  cowplot::plot_grid(
+    CHOP.TTR.BG$plot + 
+      ggtitle('CBC-BG (CHOP)') +
+      theme(
+        legend.position = c(0.8, 0.7)
+      ),
+    URMC.TTR.BG$plot + 
+      ggtitle('CBC-BG (GCH)') +
+      theme(
+        legend.position = 'none'
+      ),
+    labels = tolower(LETTERS[1:2]), 
+    ncol = 1, nrow = 2)
+
+print(Figure_4)
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0(img.save.date, '_Figure-4', ext)
+  ),  
+  plot = Figure_4,
+  width = 7, height = 7, units = 'in', dpi = dpi, compression = compress)
+```
+
+```{r, echo=FALSE}
+rm(CHOP.TTR.BG, URMC.TTR.BG)
+rm(Figure_4)
+```
+
 
 ## Revision Figures
 
-Here we plot figures necessary for manuscript revision.
+Here we plot figures necessary for manuscript revision. These figures will go in the supplementary data file, but because we are unsure about the numbers thus far, we will keep the un-numbered. 
 
 ### Time Threshold
 
@@ -542,6 +542,11 @@ And create the figure:
 ```{r}
 Supp_Figure_TimeThresh <- 
   cowplot::plot_grid(
+    URMC.TimeThresh.BG +
+      ggtitle('URMC BG') +
+      theme(
+        #axis.title.x = element_blank()
+      ),    
     CHOP.TimeThresh.BG + 
       ggtitle('CHOP BG') +
       theme(
@@ -552,24 +557,19 @@ Supp_Figure_TimeThresh <-
       theme(
         #legend.position = 'none'
       ),
-    URMC.TimeThresh.BG +
-      ggtitle('URMC BG') +
-      theme(
-        #axis.title.x = element_blank()
-      ),
     labels = tolower(LETTERS[1:3]), 
     ncol = 3, nrow = 1)
 
-Supp_Figure_TimeThresh
+print(Supp_Figure_TimeThresh)
 
 # Export 
 ggplot2::ggsave(
   filename = file.path(
     Sys.getenv('PICU_LAB_IMG_PATH'),
-    paste0('Supp-Figure-TimeThreshold_', run.date, ext)
+    paste0(img.save.date, '_Supp-Figure-TimeThreshold', ext)
   ),  
   plot = Supp_Figure_TimeThresh,
-  width = 12, height = 4, units = 'in', dpi = dpi)
+  width = 12, height = 4, units = 'in', dpi = dpi, compression = compress)
 ```
 
 ```{r, echo=FALSE}
@@ -587,74 +587,221 @@ These figures are located in the `analytic` files.
 listVars('CHOP', 'pri_cbc_bg_analytic', run.date)
 ```
 
-The variable of interest is `ba.all.non.param`:
+The variables of interest are `ba.all` and `ba.all.non.param`:
 
 ```{r}
+extractVar(ba.all, 'CHOP.BA.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
+
+extractVar(ba.all, 'URMC.BA.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
+
 extractVar(ba.all.non.param, 'CHOP.BA.NP.BG', 'CHOP', 'pri_cbc_bg_analytic', run.date)
 
 extractVar(ba.all.non.param, 'URMC.BA.NP.BG', 'URMC', 'pri_cbc_bg_analytic', run.date)
 ```
 
-And create the 2x2 figure:
+We will create a 3 row x 2 col figure. The first row are original B-A QQ plots, second row are non-parametric B-A QQ plots, and third row are non-parametric B-A plots
 
 ```{r}
 Supp_Figure_NonParamBA <- 
   cowplot::plot_grid(
+    CHOP.BA.BG$qq.plot + 
+      ggtitle('CHOP BG Original Q:Q Plot') +
+      theme(
+        #axis.title.x = element_blank()
+      ),
+    URMC.BA.BG$qq.plot + 
+      ggtitle('URMC BG Original Q:Q Plot') +
+      theme(
+        #axis.title.x = element_blank()
+      ),    
     CHOP.BA.NP.BG$qq.plot + 
-      ggtitle('CHOP BG Q:Q Plot') +
+      ggtitle('CHOP BG Non-Parametric Q:Q Plot') +
       theme(
         #axis.title.x = element_blank()
       ),
     URMC.BA.NP.BG$qq.plot + 
-      ggtitle('URMC BG Q:Q Plot') +
+      ggtitle('URMC BG Non-Parametric Q:Q Plot') +
       theme(
         #legend.position = 'none'
       ),
     CHOP.BA.NP.BG$plot +
-      ggtitle('CHOP B-A Plot') +
+      ylim(c(-4, 4)) +
+      ggtitle('CHOP Non-Parametric B-A Plot') +
       theme(
         #axis.title.x = element_blank()
       ),
     URMC.BA.NP.BG$plot +
-      ggtitle('URMC B-A Plot') +
+      ylim(c(-4, 4)) +
+      ggtitle('URMC Non-Parametric B-A Plot') +
       theme(
         #axis.title.x = element_blank()
       ),    
-    labels = tolower(LETTERS[1:4]), 
-    ncol = 2, nrow = 2)
+    labels = tolower(LETTERS[1:6]), 
+    ncol = 2, nrow = 3)
 
-Supp_Figure_NonParamBA
+print(Supp_Figure_NonParamBA)
 
 # Export 
 ggplot2::ggsave(
   filename = file.path(
     Sys.getenv('PICU_LAB_IMG_PATH'),
-    paste0('Supp-Figure-NonParam-BA_', run.date, ext)
+    paste0(img.save.date, '_Supp-Figure-NonParam-BA', ext)
   ),  
   plot = Supp_Figure_NonParamBA,
-  width = 8, height = 8, units = 'in', dpi = dpi)
+  width = 8, height = 10, units = 'in', dpi = dpi, compression = compress)
 ```
 
 ```{r, echo=FALSE}
-rm(CHOP.BA.NP.BG, URMC.BA.NP.BG)
+rm(CHOP.BA.NP.BG, URMC.BA.NP.BG, CHOP.BA.BG, URMC.BA.BG)
 rm(Supp_Figure_NonParamBA)
 ```
 
-### Sens Analysis 
+### Temporal Analysis
 
-#### Single Value per Patient
+Here we plot the Temporal 4-quadrant plots, for both All Pairs and a restricted subset of pairs. 
 
-##### Distributions
+```{r, eval=FALSE}
+listVars('URMC', 'pri_cbc_bg_temporal', run.date)
+```
 
-3 x 1 panel of CHOP BG, POC and URMC BG displaying distributions along with text describing data
+The variables of interest are `cbc.bg.all.pairs` and `cbc.bg.restrict.pairs`:
 
-##### B-A Analysis
+```{r}
+extractVar(cbc.bg.all.pairs, 'CHOP.ALL', 'CHOP', 'pri_cbc_bg_temporal', run.date)
 
-3 x 1 panel of CHOP BG, POC, and URMC BG showing B-A plots along with text describing bias and LOAs
+extractVar(cbc.bg.all.pairs, 'URMC.ALL', 'URMC', 'pri_cbc_bg_temporal', run.date)
 
-##### Time TO Result
+extractVar(cbc.bg.restrict.pairs, 'CHOP.RESTRICT', 'CHOP', 'pri_cbc_bg_temporal', run.date)
 
-2 x 1 panel of CHOP BG, URMC BG for Time TO Result along with text describing TTR
+extractVar(cbc.bg.restrict.pairs, 'URMC.RESTRICT', 'URMC', 'pri_cbc_bg_temporal', run.date)
+```
 
+Now we create the supplementary figure, which will be 2row x 2 cols. The top row will include all points, and the bottom row will restrict to those <= 6 hrs of initial labs.
 
+```{r}
+Supp_Figure_Temporal_4q <- 
+  cowplot::plot_grid(
+    CHOP.ALL[[1]] + 
+      ggtitle('CHOP - All Points') +
+      theme(
+        title = element_text(size = 12)
+        #axis.title.x = element_blank()
+      ),
+    URMC.ALL[[1]] + 
+      ggtitle('URMC - All Points') +
+      theme(
+        title = element_text(size = 12)        
+        #axis.title.x = element_blank()
+      ),   
+    CHOP.RESTRICT[[1]] + 
+      ggtitle('CHOP - Restricted Points') +
+      theme(
+        title = element_text(size = 12)        
+        #axis.title.x = element_blank()
+      ),
+    URMC.RESTRICT[[1]] + 
+      ggtitle('URMC - Restricted Points') +
+      theme(
+        title = element_text(size = 12)        
+        #axis.title.x = element_blank()
+      ),     
+    labels = tolower(LETTERS[1:4]), 
+    ncol = 2, nrow = 2)
 
+print(Supp_Figure_Temporal_4q)
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0(img.save.date, '_Supp-Figure-Temporal-4Q', ext)
+  ),  
+  plot = Supp_Figure_Temporal_4q,
+  width = 8, height = 8, units = 'in', dpi = dpi, compression = compress)
+```
+
+```{r}
+rm(CHOP.ALL, URMC.ALL, CHOP.RESTRICT, URMC.RESTRICT)
+rm(Supp_Figure_Temporal_4q)
+```
+
+### Test ROC and PR Curves
+
+Here we plot the ROC and P-R curves for the BG and POC calculations, for CHOP and URMC.
+
+The variables of interest are `cbc.bg.thresh.roc` and `thresh.roc`:
+
+```{r}
+extractVar(cbc.bg.thresh.roc, 'CHOP.BG', 'CHOP', 'pri_cbc_bg_clinical', run.date)
+
+extractVar(thresh.roc, 'CHOP.POC', 'CHOP', 'pri_cbc_istat_clinical', run.date)
+
+extractVar(cbc.bg.thresh.roc, 'URMC.BG', 'URMC', 'pri_cbc_bg_clinical', run.date)
+```
+
+Now we create the supplementary figure, which will 3 rows x 2 cols. Col 1 is ROC, Col 2 is P-R. Row 1 is CHOP BG, row 2 is CHOP POC, row 3 is URMC BG.
+
+```{r}
+Supp_Figure_Thresh_Curves <- 
+  cowplot::plot_grid(
+    CHOP.BG$p.roc + 
+      ggtitle('CHOP - BG - ROC') +
+      theme(
+        title = element_text(size = 12),
+        legend.position = c(0.75, 0.25)
+        #axis.title.x = element_blank()
+      ),
+    CHOP.BG$p.pr + 
+      ggtitle('CHOP - BG - P-R') +
+      theme(
+        title = element_text(size = 12),
+        legend.position = 'none'
+        #axis.title.x = element_blank()
+      ),
+    CHOP.POC$p.roc + 
+      ggtitle('CHOP - POC - ROC') +
+      theme(
+        title = element_text(size = 12),
+        legend.position = c(0.75, 0.25)
+        #axis.title.x = element_blank()
+      ),
+    CHOP.POC$p.pr + 
+      ggtitle('CHOP - POC - P-R') +
+      theme(
+        title = element_text(size = 12),
+        legend.position = 'none'
+        #axis.title.x = element_blank()
+      ),     
+    URMC.BG$p.roc + 
+      ggtitle('URMC - BG - ROC') +
+      theme(
+        title = element_text(size = 12),
+        legend.position = c(0.75, 0.25)
+        #axis.title.x = element_blank()
+      ),   
+    URMC.BG$p.pr + 
+      ggtitle('CHOP - BG - P-R') +
+      theme(
+        title = element_text(size = 12),
+        legend.position = 'none'
+        #axis.title.x = element_blank()
+      ),
+    labels = tolower(LETTERS[1:6]), 
+    ncol = 2, nrow = 3)
+
+print(Supp_Figure_Thresh_Curves)
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0(img.save.date, '_Supp-Figure-Thresh-Curves', ext)
+  ),  
+  plot = Supp_Figure_Thresh_Curves,
+  width = 7, height = 10, units = 'in', dpi = dpi, compression = compress)
+```
+
+```{r}
+rm(CHOP.BG, CHOP.POC, URMC.BG)
+rm(Supp_Figure_Thresh_Curves)
+```

@@ -905,6 +905,7 @@ transfusionConfusionMatrix <- function (value.x, value.y,
 
   if (to.print)
     cat(sprintf(paste0(
+      'Cutoffs: PN[1]: %0.1f\tPN[2]: %0.1f\n',
       'TP: %d (%0.4f %%)\t',
       'FP: %d (%0.4f %%)\n',
       'FN: %d (%0.4f %%)\t',
@@ -915,6 +916,7 @@ transfusionConfusionMatrix <- function (value.x, value.y,
       'NPV: %0.4f\n',
       'FOR (1-NPV): %0.4f\n',
       'NNM (1/FOR): %0.4f\n\n'),
+      cutoffs[1], cutoffs[2],
       TP, TP / length(value.x) * 100.,
       FP, FP / length(value.x) * 100.,
       FN, FN / length(value.x) * 100.,
