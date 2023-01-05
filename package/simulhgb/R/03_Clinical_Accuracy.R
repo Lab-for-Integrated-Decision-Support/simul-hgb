@@ -1,4 +1,6 @@
 # Extracted functions from `03_Clinical_Accuracy.Rmd`
+# Note: do NOT include `createPairedDataset` here
+
 
 #'
 #' @title Calculate Error Grid
@@ -9,14 +11,12 @@
 #' @param to.plot If TRUE [Default], displays the Error Grid plot
 #' @param to.return If TRUE [Default], returns the plot
 #'
-#' @export
-#'
 calculateErrorGrid <- function (df, to.plot = T, to.return = T) {
 
-  #
-  # Sub-function to define the underlying grid pts
-  #
-  .makeBaseGrid <- function () {
+  #'
+  #' Sub-function to define the underlying grid pts
+  #'
+  makeBaseGrid <- function () {
 
     # Define the points which comprise the Error Grid
     A <- data.frame(
@@ -57,7 +57,7 @@ calculateErrorGrid <- function (df, to.plot = T, to.return = T) {
     ))
   } # End of sub-function
 
-  g <- .makeBaseGrid()
+  g <- makeBaseGrid()
 
   Queries <- as.matrix(df %>% dplyr::select(NUM_VAL.x, NUM_VAL.y))
 
@@ -145,8 +145,6 @@ calculateErrorGrid <- function (df, to.plot = T, to.return = T) {
 #'
 #' @returns A pivoted data frame of covariates
 #'
-#' @export
-#'
 gatherCovariates <- function (paired.df, labs.df,
                               covars = c('pH', 'Bicarb', 'iCal', 'Gluc', 'Lactate')) {
 
@@ -217,8 +215,6 @@ gatherCovariates <- function (paired.df, labs.df,
 #'
 #' @param covars.df The Covariates data frame from `gatherCovariates()` function
 #'
-#' @export
-#'
 displayCovariateStats <- function (covars.df) {
 
   # Display stats on the covariates, including checking for NULL values and
@@ -284,8 +280,6 @@ displayCovariateStats <- function (covars.df) {
 #'     [Default: TRUE]
 #'
 #' @returns A list of the regression results as well as CIs (if computed)
-#'
-#' @export
 #'
 joinImputeRegress <- function (paired.df, covars.df, thresh.list,
                                impute.fx = median, ci = T) {
@@ -378,7 +372,6 @@ joinImputeRegress <- function (paired.df, covars.df, thresh.list,
 }
 
 
-
 #'
 #' @title Calculate Cohen Kappa
 #'
@@ -407,9 +400,7 @@ joinImputeRegress <- function (paired.df, covars.df, thresh.list,
 #' @param cutoff A scalar representing the Hgb cutoff value
 #' @param to.print If TRUE, prints results in addition to returning [Default]
 #'
-#' @returns The Cohen Kappa for these two vectors at the cutoff given
-#'
-#' @export
+#' @return The Cohen Kappa for these two vectors at the cutoff given
 #'
 calculateCohenKappa <- function (values.x, values.y,
                                  cutoff = 7.0, to.print = T) {
@@ -487,8 +478,6 @@ calculateCohenKappa <- function (values.x, values.y,
 #' @param to.print If TRUE, prints results [Default]
 #' @param to.return If TRUE, returns results [Default]
 #'
-#' @export
-#'
 transfusionConfusionMatrix <- function (value.x, value.y,
                                         cutoffs = c(7., 7.),
                                         to.print = T,
@@ -546,6 +535,7 @@ transfusionConfusionMatrix <- function (value.x, value.y,
 
   if (to.print)
     cat(sprintf(paste0(
+      'Cutoffs: PN[1]: %0.1f\tPN[2]: %0.1f\n',
       'TP: %d (%0.4f %%)\t',
       'FP: %d (%0.4f %%)\n',
       'FN: %d (%0.4f %%)\t',
@@ -556,6 +546,7 @@ transfusionConfusionMatrix <- function (value.x, value.y,
       'NPV: %0.4f\n',
       'FOR (1-NPV): %0.4f\n',
       'NNM (1/FOR): %0.4f\n\n'),
+      cutoffs[1], cutoffs[2],
       TP, TP / length(value.x) * 100.,
       FP, FP / length(value.x) * 100.,
       FN, FN / length(value.x) * 100.,
@@ -573,7 +564,6 @@ transfusionConfusionMatrix <- function (value.x, value.y,
     ))
   }
 }
-
 
 
 #'
@@ -612,8 +602,6 @@ transfusionConfusionMatrix <- function (value.x, value.y,
 #' @param cutoff.minmax A two-element vector of the minimum and maximum Hgb
 #'     values used to generate the full cutoff sequence [Default: 0., 25.]
 #' @param cutoff.by The difference between successive values in the cutoff seq
-#'
-#' @export
 #'
 calculateThresholdROC <- function (paired.df,
                                    to.print = T, to.return = T,
@@ -771,7 +759,6 @@ calculateThresholdROC <- function (paired.df,
 }
 
 
-
 #'
 #' @title Run All Clinical
 #'
@@ -789,8 +776,6 @@ calculateThresholdROC <- function (paired.df,
 #' @param run.date A string representation of date for saving (format: %Y-%m-%d)
 #' @param save.fn The file name (which will be concatenated with SITE and run.date),
 #'     or NA [Default] if we do not wish to save any results to a file
-#'
-#' @export
 #'
 runAllClinical <- function (labs.df, cohort.df, compare.PN,
                             time.diff, multi.per.pt, primary.hgb.cutoff,
@@ -837,7 +822,7 @@ runAllClinical <- function (labs.df, cohort.df, compare.PN,
       covars.df = covars.df,
       thresh.list = thresh.list,
       impute.fx = median,
-      ci = F
+      ci = T
     )
 
 
@@ -863,15 +848,26 @@ runAllClinical <- function (labs.df, cohort.df, compare.PN,
   rm(thresh)
 
   # Compute Transfusion Confusion Matrix at a range of PN[2] cutoff values
-  for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0))
+  mat.across.cutoffs <- list()
 
-    transfusionConfusionMatrix(
+  for (pn2.cutoff in c(7.0, 7.5, 8.0, 8.5, 9.0)) {
+
+    res <- transfusionConfusionMatrix(
       value.x = paired.df$NUM_VAL.x,
       value.y = paired.df$NUM_VAL.y,
       cutoffs = c(primary.hgb.cutoff, pn2.cutoff),
       to.print = T,
-      to.return = F
+      to.return = T
     )
+
+    mat.across.cutoffs <-
+      append(
+        mat.across.cutoffs,
+        list(list( # Use a double list here so that we enclose each cutoff results in a list
+          res = res, cutoff = pn2.cutoff
+        ))
+      )
+  }
 
   rm(pn2.cutoff)
 
@@ -896,7 +892,7 @@ runAllClinical <- function (labs.df, cohort.df, compare.PN,
       primary.cutoff,
       #paired.df, covars.df,
       error.grid,
-      thresh.list, regress.res,
+      thresh.list, regress.res, mat.across.cutoffs,
       primary.hgb.cutoff, thresh.roc
     )
   }

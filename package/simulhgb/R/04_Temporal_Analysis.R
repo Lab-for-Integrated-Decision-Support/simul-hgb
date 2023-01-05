@@ -9,8 +9,6 @@
 #' @param to.print If TRUE, prints results [Default]
 #' @param to.return If TRUE, returns results [Default]
 #'
-#' @export
-#'
 describeRepeatedPairs <- function (paired.df, to.print = T, to.return = T) {
 
   # Identify the counts of simultaneous labs per patient
@@ -102,17 +100,16 @@ describeRepeatedPairs <- function (paired.df, to.print = T, to.return = T) {
 #' @param to.print If True, prints results [Default]
 #' @param to.return If True, returns results [Default]
 #'
-#' @export
-#'
 calculateChangeComparison <- function (paired.df, time.diff.max = Inf,
                                        pt.size = 0.3, pt.alpha = 0.3,
                                        perturb.amt = c(0.0001, 0.001),
                                        to.print = T, to.return = T) {
 
-  #
-  # Sub-function to define the underlying grid pts
-  #
-  .makeBaseGrid <- function (g.size = 0.8, g.alpha = 0.5) {
+  #'
+  #' Sub-function to define the underlying grid pts
+  #'
+  makeBaseGrid <- function (g.size = 0.8, g.alpha = 0.7,
+                            g.colors = c('#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3')) {
 
     # Center Orange - Zone 1
     A.1 <- data.frame(
@@ -198,50 +195,52 @@ calculateChangeComparison <- function (paired.df, time.diff.max = Inf,
                   slope = 1, intercept = 0, na.rm = FALSE,
                   show.legend = NA, size = .5, color = '#666666', linetype = 'dashed') +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = A.1) +
+                   fill = g.colors[1], alpha = g.alpha, data = A.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = A.2) +
+                   fill = g.colors[1], alpha = g.alpha, data = A.2) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = A.3) +
+                   fill = g.colors[1], alpha = g.alpha, data = A.3) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = B.1) +
+                   fill = g.colors[1], alpha = g.alpha, data = B.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = B.2) +
+                   fill = g.colors[1], alpha = g.alpha, data = B.2) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = C.1) +
+                   fill = g.colors[1], alpha = g.alpha, data = C.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'orange', alpha = g.alpha, data = C.2) +
+                   fill = g.colors[1], alpha = g.alpha, data = C.2) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = D.1) +
+                   fill = g.colors[2], alpha = g.alpha, data = D.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = D.2) +
+                   fill = g.colors[2], alpha = g.alpha, data = D.2) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = D.3) +
+                   fill = g.colors[2], alpha = g.alpha, data = D.3) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = D.4) +
+                   fill = g.colors[2], alpha = g.alpha, data = D.4) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = E.1) +
+                   fill = g.colors[2], alpha = g.alpha, data = E.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = E.2) +
+                   fill = g.colors[2], alpha = g.alpha, data = E.2) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = E.3) +
+                   fill = g.colors[2], alpha = g.alpha, data = E.3) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'pink', alpha = g.alpha, data = E.4) +
+                   fill = g.colors[2], alpha = g.alpha, data = E.4) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'green', alpha = g.alpha, data = G.1) +
+                   fill = g.colors[3], alpha = g.alpha, data = G.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'green', alpha = g.alpha, data = G.2) +
+                   fill = g.colors[3], alpha = g.alpha, data = G.2) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'green', alpha = g.alpha, data = G.3) +
+                   fill = g.colors[3], alpha = g.alpha, data = G.3) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'green', alpha = g.alpha, data = G.4) +
+                   fill = g.colors[3], alpha = g.alpha, data = G.4) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'blue', alpha = g.alpha, data = H.1) +
+                   fill = g.colors[4], alpha = g.alpha, data = H.1) +
       geom_polygon(aes(x = X, y = Y), size = g.size, color = 'black', linetype = 'dashed',
-                   fill = 'blue', alpha = g.alpha, data = H.2) +
+                   fill = g.colors[4], alpha = g.alpha, data = H.2) +
       xlim(-100, 100) + ylim(-100, 100) +
-      coord_cartesian(ylim = c(-100, 100), xlim = c(-100, 100)) +
-      scale_fill_distiller(palette = 4, direction = 1)
+      coord_cartesian(ylim = c(-100, 100), xlim = c(-100, 100), clip = 'off') #+
+    #scale_fill_distiller(palette = 4, direction = 1)
+    #scale_fill_brewer(type = 'qual', palette = 'Set2',
+    #labels = c('Zone 1', 'Zone 2', 'Zone 3', 'Zone 4'))
 
     return(list(
       vertices = list(
@@ -256,7 +255,7 @@ calculateChangeComparison <- function (paired.df, time.diff.max = Inf,
     ))
   } # End of sub-function
 
-  g <- .makeBaseGrid()
+  g <- makeBaseGrid()
 
   # Calculate absolute and percent change data frame
   change.df <-
@@ -300,7 +299,8 @@ calculateChangeComparison <- function (paired.df, time.diff.max = Inf,
     theme_bw() +
     theme(panel.grid.minor = element_blank()) +
     theme(panel.background = element_rect(fill = "transparent", colour = NA),
-          plot.background = element_rect(fill = "transparent", colour = NA))
+          plot.background = element_rect(fill = "transparent", colour = NA),
+          legend.position = 'bottom', legend.title = element_blank())
 
   if (to.print)
     print(Error_Grid)
@@ -356,12 +356,11 @@ calculateChangeComparison <- function (paired.df, time.diff.max = Inf,
   # Return
   if (to.return)
     return(list(
-      Error_Grid,
-      pinp,
-      list(Zone1, Zone2, Zone3, Zone4)
+      grid = Error_Grid,
+      pinp = pinp,
+      zones = list(Zone1, Zone2, Zone3, Zone4)
     ))
 }
-
 
 
 #'
@@ -380,8 +379,6 @@ calculateChangeComparison <- function (paired.df, time.diff.max = Inf,
 #' @param run.date A string representation of date for saving (format: %Y-%m-%d)
 #' @param save.fn The file name (which will be concatenated with SITE and run.date),
 #'     or NA [Default] if we do not wish to save any results to a file
-#'
-#' @export
 #'
 runAllTemporal <- function (labs.df, cohort.df, compare.PN,
                             time.diff, multi.per.pt, time.diff.max,

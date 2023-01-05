@@ -543,7 +543,7 @@ And create the figure:
 Supp_Figure_TimeThresh <- 
   cowplot::plot_grid(
     URMC.TimeThresh.BG +
-      ggtitle('URMC BG') +
+      ggtitle('GCH BG') +
       theme(
         #axis.title.x = element_blank()
       ),    
@@ -610,7 +610,7 @@ Supp_Figure_NonParamBA <-
         #axis.title.x = element_blank()
       ),
     URMC.BA.BG$qq.plot + 
-      ggtitle('URMC BG Original Q:Q Plot') +
+      ggtitle('GCH BG Original Q:Q Plot') +
       theme(
         #axis.title.x = element_blank()
       ),    
@@ -620,7 +620,7 @@ Supp_Figure_NonParamBA <-
         #axis.title.x = element_blank()
       ),
     URMC.BA.NP.BG$qq.plot + 
-      ggtitle('URMC BG Non-Parametric Q:Q Plot') +
+      ggtitle('GCH BG Non-Parametric Q:Q Plot') +
       theme(
         #legend.position = 'none'
       ),
@@ -632,7 +632,7 @@ Supp_Figure_NonParamBA <-
       ),
     URMC.BA.NP.BG$plot +
       ylim(c(-4, 4)) +
-      ggtitle('URMC Non-Parametric B-A Plot') +
+      ggtitle('GCH Non-Parametric B-A Plot') +
       theme(
         #axis.title.x = element_blank()
       ),    
@@ -688,7 +688,7 @@ Supp_Figure_Temporal_4q <-
         #axis.title.x = element_blank()
       ),
     URMC.ALL[[1]] + 
-      ggtitle('URMC - All Points') +
+      ggtitle('GCH - All Points') +
       theme(
         title = element_text(size = 12)        
         #axis.title.x = element_blank()
@@ -700,7 +700,7 @@ Supp_Figure_Temporal_4q <-
         #axis.title.x = element_blank()
       ),
     URMC.RESTRICT[[1]] + 
-      ggtitle('URMC - Restricted Points') +
+      ggtitle('GCH - Restricted Points') +
       theme(
         title = element_text(size = 12)        
         #axis.title.x = element_blank()
@@ -773,14 +773,14 @@ Supp_Figure_Thresh_Curves <-
         #axis.title.x = element_blank()
       ),     
     URMC.BG$p.roc + 
-      ggtitle('URMC - BG - ROC') +
+      ggtitle('GCH - BG - ROC') +
       theme(
         title = element_text(size = 12),
         legend.position = c(0.75, 0.25)
         #axis.title.x = element_blank()
       ),   
     URMC.BG$p.pr + 
-      ggtitle('CHOP - BG - P-R') +
+      ggtitle('GCH - BG - P-R') +
       theme(
         title = element_text(size = 12),
         legend.position = 'none'

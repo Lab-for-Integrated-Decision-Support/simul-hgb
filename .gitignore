@@ -7,7 +7,7 @@
 
 # Markdown HTML files
 r-markdown/*.html
-outputs/
+#outputs/
 
 # Man pages
 *.Rd

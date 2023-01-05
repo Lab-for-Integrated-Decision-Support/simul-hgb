@@ -16,7 +16,6 @@
 }
 
 
-
 #'
 #' @title List Vars
 #'
@@ -27,8 +26,6 @@
 #' @param run.date The run.date string
 #' @param attach If TRUE, attaches to the file [Default]
 #' @param detach If TRUE, detaches the file after extraction [Default]
-#'
-#' @export
 #'
 listVars <- function (site, file, run.date, attach = T, detach = T) {
 
@@ -47,7 +44,6 @@ listVars <- function (site, file, run.date, attach = T, detach = T) {
 }
 
 
-
 #'
 #' @title Extract Var
 #'
@@ -61,8 +57,6 @@ listVars <- function (site, file, run.date, attach = T, detach = T) {
 #' @param run.date The run.date string
 #' @param attach If TRUE, attaches to the file [Default]
 #' @param detach If TRUE, detaches the file after extraction [Default]
-#'
-#' @export
 #'
 extractVar <- function (old.var, new.var.name, site, file, run.date,
                         attach = T, detach = T) {

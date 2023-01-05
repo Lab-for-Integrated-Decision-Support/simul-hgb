@@ -15,8 +15,6 @@
 #'
 #' @returns The resulting joined data frame
 #'
-#' @export
-#'
 createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
                                  CN = 'Hgb', multi.per.pt = T) {
 
@@ -146,6 +144,7 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
   return(per.pt.df)
 }
 
+
 #'
 #' @title Describe Paired Distributions
 #'
@@ -157,8 +156,6 @@ createPairedDataset <- function (labs.df, cohort.df, PN, time.diff,
 #' @param to.return If TRUE, returns list of results; otherwise returns NULL [Default]
 #'
 #' @returns Pending the above flag, either NULL or list of graphics and t test
-#'
-#' @export
 #'
 describePairedDistributions <- function (df, PN,
                                          paired.t = T, to.return = F) {
@@ -249,8 +246,6 @@ describePairedDistributions <- function (df, PN,
 #'
 #' @returns A list of results containing cor estimates, CI, sample size
 #'
-#' @export
-#'
 determineCorrelation <- function (df, DPT) {
 
   # Filter by the department of interest first
@@ -305,6 +300,7 @@ determineCorrelation <- function (df, DPT) {
   ))
 }
 
+
 #'
 #' @title Compare Pearson Correlations
 #'
@@ -317,7 +313,6 @@ determineCorrelation <- function (df, DPT) {
 #'
 #' @returns The p-value
 #'
-#' @export
 #'
 comparePearsonCorrelations <- function (r1, n1, r2, n2) {
 
@@ -331,7 +326,6 @@ comparePearsonCorrelations <- function (r1, n1, r2, n2) {
 
   return(pval)
 }
-
 
 
 #'
@@ -453,7 +447,8 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
     return(
       list(
         stats = stats,
-        plot = p
+        plot = p,
+        qq.plot = p.qq
       ))
   } else {
     return()
@@ -472,7 +467,6 @@ performBlandAltmanANalysis <- function (df, PN, DPT, pt.size = 0.8,
 #'
 #' @returns A list containing the plot and Wilcoxon results
 #'
-#' @export
 #'
 describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
 
@@ -561,6 +555,7 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
   ))
 }
 
+
 #'
 #' @title Run All Analytic
 #'
@@ -576,8 +571,6 @@ describeTimeToResult <- function (df, PN, WILCOX.CI = F) {
 #' @param run.date A string representation of date for saving (format: %Y-%m-%d)
 #' @param save.fn The file name (which will be concatenated with SITE and run.date),
 #'     or NA [Default] if we do not wish to save any results to a file
-#'
-#' @export
 #'
 runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
                             time.diff, multi.per.pt, run.date, save.fn = NA) {
@@ -643,6 +636,16 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
     to.return = T
   )
 
+  # Bland Altman Analysis
+  ba.all.non.param <- performBlandAltmanANalysis(
+    df = paired.df,
+    PN = c('CBC', compare.PN),
+    DPT = c('PICU', 'CICU'),
+    to.graph = T,
+    to.return = T,
+    non.param = c(0.025, 0.0975)
+  )
+
   # Time-to-result
   TTR.p <- describeTimeToResult(
     df = paired.df,
@@ -664,12 +667,11 @@ runAllAnalytic <- function (labs.df, cohort.df, compare.PN,
       time.diff, multi.per.pt,
       paired.res,
       pcc, pcc.picu, pcc.cicu,
-      ba.all, ba.picu, ba.cicu,
+      ba.all, ba.picu, ba.cicu, ba.all.non.param,
       TTR.p
     )
   }
 }
-
 
 
 

@@ -9,8 +9,6 @@
 #' @param PROC_NAME The Procedure name to display
 #' @param COMP_NAME The Component name to display
 #'
-#' @export
-#'
 labValueDescriptions <- function (df, PN, CN) {
 
   # Limit by the PN and CN
@@ -51,8 +49,6 @@ labValueDescriptions <- function (df, PN, CN) {
 #' @returns A list of two elements:
 #'     cutoffs := The cutoffs data frame containing counts for each minute cutoff
 #'     fig := The ggplot figure
-#'
-#' @export
 #'
 timeThresholdGraph <- function (df, PN, CN,
                                 to.save = T, run.date = NA, to.return = F) {
@@ -139,13 +135,11 @@ timeThresholdGraph <- function (df, PN, CN,
           run.date,'.rData'
         )
       ),
-      output.list
+      p
     )
   }
 
   # Return
   if (to.return)
     return(output.list)
-  else
-    return()
 }
