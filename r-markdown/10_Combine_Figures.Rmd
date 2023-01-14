@@ -236,6 +236,8 @@ rm(Figure_1)
 
 Figure 2 is a six-panel figure, consisting of the three Bland-Altman figures across the top (CHOP BG, URMC BG, CHOP POC) followed by the three Error Grids across the bottom (same order - CHOP BG, URMC BG, CHOP POC). The B-A figures are stored in `pri_cbc_bg_analytic` and the error grids are stored in `pri_cbc_bg_clinical`.
 
+**ACD 2023-01-14** At the request of the editorial office, we are modifying Figure 2 to be a three-panel figure of the Error Grids. The three B-A plots will be placed in the Supplemental Digital Content. We will create both figures in this section, since the code was already here. 
+
 First we view the variables to determine the BA plots (set to EVAL=FALSE since we don't need to do this each time):
 
 ```{r, eval=FALSE}
@@ -273,7 +275,8 @@ extractVar(error.grid, 'p.CHOP.EG.POC', 'CHOP', 'pri_cbc_istat_clinical', run.da
 Generate the figure:
 
 ```{r}
-Figure_2 <- 
+
+Supp_BA_Plots <-
   cowplot::plot_grid(
     p.CHOP.BA.BG$plot +
       ggtitle('CBC-BG (CHOP)') +
@@ -299,6 +302,23 @@ Figure_2 <-
         title = element_text(size = 11),
         axis.title = element_text(size = 9)
       ),
+    labels = tolower(LETTERS[1:3]), 
+    ncol = 1, nrow = 3
+  )
+
+print(Supp_BA_Plots)
+
+# Export 
+ggplot2::ggsave(
+  filename = file.path(
+    Sys.getenv('PICU_LAB_IMG_PATH'),
+    paste0(img.save.date, '_Supp-Figure-Orig-BA-Plots', ext)
+  ),
+  plot = Supp_BA_Plots,
+  width = 4, height = 8, units = 'in', dpi = dpi, compression = compress)
+  
+Figure_2 <- 
+  cowplot::plot_grid(
     p.CHOP.EG.BG + 
       ggtitle('CBC-BG (CHOP)') +
       xlab('CBC Hgb (g/dL)') +
@@ -323,8 +343,8 @@ Figure_2 <-
         title = element_text(size = 11),
         axis.title = element_text(size = 9)
       ),
-    labels = tolower(LETTERS[1:6]), 
-    ncol = 3, nrow = 2)
+    labels = tolower(LETTERS[1:3]), 
+    ncol = 3, nrow = 1)
 
 print(Figure_2)
 
@@ -335,13 +355,14 @@ ggplot2::ggsave(
     paste0(img.save.date, '_Figure-2', ext)
   ),
   plot = Figure_2,
-  width = 8, height = 6, units = 'in', dpi = dpi, compression = compress)
+  width = 8, height = 3, units = 'in', dpi = dpi, compression = compress)
 ```
 
 ```{r, echo=FALSE}
 rm(p.CHOP.BA.BG, p.URMC.BA.BG, p.CHOP.BA.POC)
 rm(p.CHOP.EG.BG, p.URMC.EG.BG, p.CHOP.EG.POC)
 rm(Figure_2)
+rm(Supp_BA_Plots)
 ```
 
 ### Figure 3
